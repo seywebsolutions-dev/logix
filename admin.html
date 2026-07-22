@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logix — Admin Dashboard | STA Seychelles</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <base href="/logix/">
+</head>
+<body>
+
+<!-- ============================================================
+     SCREEN 1: Admin login
+     ============================================================ -->
+<div class="auth-screen" id="adminLoginScreen">
+    <div class="auth-card neu">
+        <div style="display:flex;align-items:center;gap:18px;margin-bottom:22px;">
+            <div class="brand-mark" style="background:linear-gradient(135deg,var(--danger) 0%, #991b1c 100%); box-shadow:0 4px 20px rgba(220,38,38,0.3);">LX</div>
+            <div>
+                <h1 style="margin:0;font-size:24px;font-weight:700;">Logix Admin</h1>
+                <p style="margin:0;font-size:12px;color:var(--text-muted);font-weight:500;letter-spacing:0.4px;">STA SEYCHELLES · SUPERVISOR DASHBOARD</p>
+            </div>
+        </div>
+        <p>Restricted access. Administrator and Supervisor only.</p>
+        <form id="adminLoginForm">
+            <div>
+                <label for="adminUsername">Username</label>
+                <input type="text" id="adminUsername" autocomplete="username" required placeholder="Enter your username">
+            </div>
+            <div>
+                <label for="adminPassword">Password</label>
+                <input type="password" id="adminPassword" autocomplete="current-password" required placeholder="Enter your password">
+            </div>
+            <div class="error-text" id="adminLoginError"></div>
+            <button type="submit" class="neu-btn gold">Log in</button>
+        </form>
+        <a href="index.html" class="hint-link">← Back to employee portal</a>
+    </div>
+</div>
+
+<!-- ============================================================
+     SCREEN 2: Admin dashboard
+     ============================================================ -->
+<div class="wrap" id="adminDashboard" style="display:none;">
+
+    <div class="topbar">
+        <div class="brand">
+            <div class="brand-mark">LX</div>
+            <div>
+                <h1>Logix</h1>
+                <span>Admin Dashboard · STA Seychelles</span>
+            </div>
+        </div>
+        <div class="topbar-actions">
+            <button id="themeToggle" class="neu-btn icon-btn" title="Toggle dark mode">🌙</button>
+            <button id="adminLogoutBtn" class="neu-btn danger">Log out</button>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <button class="neu-btn tab-btn active" data-tab="attendance">Attendance</button>
+        <button class="neu-btn tab-btn" data-tab="leaves">Leave</button>
+        <button class="neu-btn tab-btn" data-tab="employees">Employees</button>
+        <button class="neu-btn tab-btn" data-tab="board">Announcements</button>
+    </div>
+
+    <!-- ---------- Attendance ---------- -->
+    <div class="tab-panel active" id="tab-attendance">
+        <div class="neu card">
+            <div class="card-header">
+                <div>
+                    <h3 class="section-title">Today &amp; this month</h3>
+                    <p class="muted">Clock times, current status, and attendance % for every active employee.</p>
+                </div>
+                <button class="neu-btn" id="refreshAttendanceBtn">Refresh</button>
+            </div>
+            <div style="overflow-x:auto;">
+                <table id="attendanceTable">
+                    <thead>
+                        <tr>
+                            <th>Employee</th>
+                            <th>Clock In</th>
+                            <th>Clock Out</th>
+                            <th>Hours</th>
+                            <th>Status</th>
+                            <th>Attendance %</th>
+                            <th>Export</th>
+                        </tr>
+                    </thead>
+                    <tbody id="attendanceTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ---------- Leaves ---------- -->
+    <div class="tab-panel" id="tab-leaves">
+        <div class="neu card">
+            <div class="card-header">
+                <div>
+                    <h3 class="section-title">Leave requests</h3>
+                    <p class="muted">Approve or deny requests submitted by staff.</p>
+                </div>
+                <button class="neu-btn" id="refreshLeavesBtn">Refresh</button>
+            </div>
+            <div style="overflow-x:auto;">
+                <table id="leavesTable">
+                    <thead>
+                        <tr>
+                            <th>Employee</th>
+                            <th>Type · Date</th>
+                            <th>Reason</th>
+                            <th>Status</th>
+                            <th>Review note</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leavesTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ---------- Employees ---------- -->
+    <div class="tab-panel" id="tab-employees">
+        <div class="grid-2">
+            <div class="neu card">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                    <div>
+                        <h3 class="section-title">Add employee</h3>
+                        <p class="muted">Register a new staff member.</p>
+                    </div>
+                </div>
+                <form id="addEmployeeForm" style="margin-top:16px; display:flex; flex-direction:column; gap:14px;">
+                    <div>
+                        <label for="newWorkerId">Worker ID</label>
+                        <input type="text" id="newWorkerId" placeholder="EMP" required>
+                    </div>
+                    <div>
+                        <label for="newFullName">Full name</label>
+                        <input type="text" id="newFullName" placeholder="e.g. Alex Rivera" required>
+                    </div>
+                    <div>
+                        <label for="newPosition">Position / Role</label>
+                        <input type="text" id="newPosition" placeholder="e.g. Mathematics Teacher" required>
+                    </div>
+                    <div>
+                        <label for="newDepartment">Department</label>
+                        <select id="newDepartment"><option value="">—</option></select>
+                    </div>
+                    <div>
+                        <label for="newEmail">Email</label>
+                        <input type="email" id="newEmail" placeholder="name@sta.sc">
+                    </div>
+                    <div>
+                        <label for="newPhone">Phone</label>
+                        <input type="tel" id="newPhone" placeholder="+248">
+                    </div>
+                    <button type="submit" class="neu-btn gold" style="margin-top:4px;">Add employee</button>
+                </form>
+            </div>
+
+            <div class="neu card">
+                <div class="card-header">
+                    <h3 class="section-title">All staff</h3>
+                    <button class="neu-btn" id="refreshEmployeesBtn">Refresh</button>
+                </div>
+                <div id="employeesList"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ---------- Announcements ---------- -->
+    <div class="tab-panel" id="tab-board">
+        <div class="neu card">
+            <h3 class="section-title">Post announcement</h3>
+            <p class="muted" style="margin-top:2px; margin-bottom:16px;">Visible to every employee on their dashboard.</p>
+            <form id="postMessageForm" style="display:flex; gap:12px; align-items:flex-start;">
+                <textarea id="newMessageText" rows="3" placeholder="e.g. Staff meeting Friday at 3pm in the conference room." required></textarea>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    <button type="submit" class="neu-btn gold" style="white-space:nowrap;">Post</button>
+                </div>
+            </form>
+            <div id="adminMessageBoard" style="margin-top:22px;"></div>
+        </div>
+    </div>
+</div>
+
+<script src="js/theme.js"></script>
+<script type="text/javascript">
+  window.LOGIX_SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
+  window.LOGIX_SUPABASE_ANON_KEY = 'public-anon-key';
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/helpers.js"></script>
+<script src="js/admin.js"></script>
+</body>
+</html>

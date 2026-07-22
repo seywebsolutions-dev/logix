@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logix — Employee Portal | STA Seychelles</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <base href="/logix/">
+</head>
+<body>
+
+<!-- ============================================================
+     SCREEN 1: Worker ID entry
+     ============================================================ -->
+<div class="auth-screen" id="loginScreen">
+    <div class="auth-card neu">
+        <div style="display:flex;align-items:center;gap:18px;margin-bottom:22px;">
+            <div class="brand-mark">LX</div>
+            <div>
+                <h1 style="margin:0;font-size:24px;font-weight:700;">Logix</h1>
+                <p style="margin:0;font-size:12px;color:var(--text-muted);font-weight:500;letter-spacing:0.4px;">STA SEYCHELLES · EMPLOYEE PORTAL</p>
+            </div>
+        </div>
+        <p>Enter your Worker ID to access attendance, leave, and announcements.</p>
+        <form id="loginForm">
+            <div>
+                <label for="workerIdInput">Worker ID</label>
+                <input type="text" id="workerIdInput" placeholder="e.g. EMP001" autocomplete="off" required>
+            </div>
+            <div class="error-text" id="loginError"></div>
+            <button type="submit" class="neu-btn gold">Continue</button>
+        </form>
+        <a href="admin.html" class="hint-link">Administrator / Supervisor login →</a>
+    </div>
+</div>
+
+<!-- ============================================================
+     SCREEN 2: Employee dashboard
+     ============================================================ -->
+<div class="wrap" id="dashboardScreen" style="display:none;">
+
+    <div class="topbar">
+        <div class="brand">
+            <div class="brand-mark">LX</div>
+            <div>
+                <h1>Logix</h1>
+                <span>Employee Portal · STA Seychelles</span>
+            </div>
+        </div>
+        <div class="topbar-actions">
+            <button id="themeToggle" class="neu-btn icon-btn" title="Toggle dark mode">🌙</button>
+            <button id="switchUserBtn" class="neu-btn">Switch user</button>
+        </div>
+    </div>
+
+    <div style="padding:28px 32px 0; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px;">
+        <div class="id-badge">
+            <div class="id-avatar" id="idAvatarInitials">--</div>
+            <div>
+                <h2 id="idFullName">—</h2>
+                <div class="position" id="idPosition">—</div>
+                <div class="worker-id" id="idWorkerId">—</div>
+            </div>
+        </div>
+        <div id="roleBadge" style="margin-bottom:4px;"></div>
+    </div>
+    <br>
+
+    <div class="grid-2" style="padding:0 32px;">
+        <!-- Clock card -->
+        <div class="neu card">
+            <div class="card-header">
+                <div>
+                    <h3 class="section-title">Time clock</h3>
+                    <p class="muted">Clock in when you arrive, clock out when you leave.</p>
+                </div>
+                <div class="status-pill neu-inset off" id="clockStatusPill" style="margin-top:0;">
+                    <span class="status-dot"></span> Not clocked in
+                </div>
+            </div>
+            <div class="clock-display">
+                <div class="clock-time" id="liveClock">--:--:--</div>
+                <div class="clock-date" id="liveDate">—</div>
+                <div class="clock-actions">
+                    <button class="neu-btn gold" id="clockInBtn">Clock In</button>
+                    <button class="neu-btn danger" id="clockOutBtn" disabled>Clock Out</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lunch + attendance -->
+        <div>
+            <div class="neu card" style="margin-bottom:24px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <h3 class="section-title">Lunch status</h3>
+                        <p class="muted">Let your supervisor know when you're on break.</p>
+                    </div>
+                    <div style="text-align:right;">
+                        <strong id="lunchLabel" style="font-size:13px;color:var(--text-secondary)">Not on lunch</strong><br>
+                        <div class="switch neu-inset" id="lunchSwitch" style="margin:8px 0 0 auto;">
+                            <div class="knob"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="neu card">
+                <h3 class="section-title">This month's attendance</h3>
+                <div class="attendance-ring-wrap">
+                    <div id="attendanceRingContainer"></div>
+                    <div class="attendance-copy">
+                        <div class="big" id="attendanceHeadline">—</div>
+                        <p class="muted">Working days present vs. working days this month.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid-2" style="padding:24px 32px 40px;">
+        <!-- Leave request -->
+        <div class="neu card">
+            <h3 class="section-title">Leave request</h3>
+            <p class="muted" style="margin-top:2px; margin-bottom:16px;">Submit a request for your supervisor to review.</p>
+            <form id="sickLeaveForm" style="display:flex; flex-direction:column; gap:14px;">
+                <div>
+                    <label for="leaveType">Leave type</label>
+                    <select id="leaveType">
+                        <option value="SL">Sick Leave</option>
+                        <option value="CL">Casual Leave</option>
+                        <option value="AL">Annual Leave</option>
+                        <option value="ML">Maternity Leave</option>
+                        <option value="PL">Paternity Leave</option>
+                        <option value="STL">Study Leave</option>
+                        <option value="EL">Emergency Leave</option>
+                    </select>
+                </div>
+                <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                    <div style="flex:1 1 150px;">
+                        <label for="leaveStartDate">Start date</label>
+                        <input type="date" id="leaveStartDate" required>
+                    </div>
+                    <div style="flex:1 1 150px;">
+                        <label for="leaveEndDate">Rejoin date</label>
+                        <input type="date" id="leaveEndDate" required>
+                    </div>
+                </div>
+                <div>
+                    <label for="leaveReason">Reason (optional)</label>
+                    <textarea id="leaveReason" rows="3" placeholder="Briefly describe the situation..."></textarea>
+                </div>
+                <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:var(--text-secondary); font-weight:500;">
+                        <input type="checkbox" id="isHalfDay" style="width:auto;box-shadow:none;"> Half day
+                    </label>
+                    <span style="flex:1;"></span>
+                    <button type="submit" class="neu-btn gold">Submit request</button>
+                </div>
+            </form>
+            <div style="margin-top:22px;">
+                <h3 class="section-title" style="font-size:0.9rem;">Your recent requests</h3>
+                <div id="myLeaveList" style="margin-top:10px;"></div>
+            </div>
+        </div>
+
+        <!-- Announcements -->
+        <div class="neu card">
+            <h3 class="section-title">Announcements</h3>
+            <p class="muted" style="margin-top:2px; margin-bottom:16px;">Important updates from the administration.</p>
+            <div id="messageBoard"></div>
+        </div>
+    </div>
+</div>
+
+<script src="js/theme.js"></script>
+<script type="text/javascript">
+  window.LOGIX_SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
+  window.LOGIX_SUPABASE_ANON_KEY = 'public-anon-key';
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/helpers.js"></script>
+<script src="js/employee.js"></script>
+</body>
+</html>
