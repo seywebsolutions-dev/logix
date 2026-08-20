@@ -201,6 +201,31 @@
                         </div>
                         <button type="submit" class="btn primary block">Add and generate code</button>
                     </form>
+
+                    <h3 class="card-title" style="margin:var(--sp-6) 0 var(--sp-2);">Import a whole list</h3>
+                    <p class="muted" style="margin-bottom:var(--sp-3);">
+                        For setting up the academy roll, or a new intake of staff. Paste from a
+                        spreadsheet — one person per line.
+                    </p>
+
+                    <div class="field">
+                        <label for="bulkPaste">
+                            Name, position, email, phone, department
+                            <span class="muted">— only the first two are required</span>
+                        </label>
+                        <textarea id="bulkPaste" rows="6" spellcheck="false"
+                                  placeholder="Marie Rose,Lecturer — Culinary Arts,marie.rose@sta.sc,2510101,Culinary
+Jean Baptiste,Maintenance Officer
+Anne Larue,Registry Clerk,anne.larue@sta.sc"></textarea>
+                    </div>
+
+                    <div style="display:flex; gap:var(--sp-3); flex-wrap:wrap; align-items:center;">
+                        <button type="button" class="btn" id="bulkPreviewBtn">Check the list</button>
+                        <button type="button" class="btn primary hidden" id="bulkImportBtn">Import</button>
+                        <span class="muted" id="bulkSummary"></span>
+                    </div>
+
+                    <div id="bulkResult" style="margin-top:var(--sp-4);"></div>
                 </div>
 
                 <div class="card">

@@ -60,6 +60,8 @@ function bindEvents() {
   on('exportPdfAttendanceBtn', 'click', exportAttendancePDFReport);
   on('refreshLeavesBtn', 'click', loadLeaves);
   on('refreshEmployeesBtn', 'click', loadEmployees);
+  on('bulkPreviewBtn', 'click', previewBulkImport);
+  on('bulkImportBtn', 'click', runBulkImport);
   on('refreshAuditBtn', 'click', loadAuditTrail);
   on('refreshDeniedBtn', 'click', loadDeniedAttempts);
   on('addEmployeeForm', 'submit', addEmployee);
@@ -945,5 +947,221 @@ async function loadAuditTrail() {
     `).join('');
   } catch (err) {
     body.innerHTML = '<tr><td colspan="5" class="empty-state">Could not load the audit trail.</td></tr>';
+  }
+}
+
+/* ============================================================
+   Bulk staff import
+   ------------------------------------------------------------
+   Seventy people through the single-add form is an afternoon, and
+   seventy one-time codes copied down by hand is a lost code. This
+   takes a paste from a spreadsheet instead, and hands back a file
+   of codes to distribute.
+
+   The codes are generated here, the same way the single-add form
+   does it, and hashed by the database. They are shown once.
+   ============================================================ */
+
+let bulkParsed = [];
+
+// A pragmatic CSV line reader: handles quoted fields containing commas,
+// and doubled quotes inside a quoted field. Anything more exotic than
+// that belongs in a spreadsheet, not here.
+function parseCsvLine(line) {
+  const out = [];
+  let cur = '';
+  let quoted = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (quoted) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++; }
+        else quoted = false;
+      } else cur += ch;
+    } else if (ch === '"') {
+      quoted = true;
+    } else if (ch === ',' || ch === '\t') {
+      out.push(cur.trim()); cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+const BULK_HEADINGS = ['name', 'full name', 'full_name', 'staff', 'employee'];
+
+function parseBulkPaste(text) {
+  const rows = [];
+  const problems = [];
+
+  text.split(/\r?\n/).forEach((raw, idx) => {
+    const line = raw.trim();
+    if (!line) return;
+
+    const cells = parseCsvLine(line);
+
+    // Let people paste a spreadsheet with its header row still attached.
+    if (idx === 0 && BULK_HEADINGS.includes((cells[0] || '').toLowerCase())) return;
+
+    const [full_name, position, email, phone, department] = cells;
+
+    if (!full_name) { problems.push(`Line ${idx + 1}: no name`); return; }
+    if (!position)  { problems.push(`Line ${idx + 1}: ${full_name} has no position`); return; }
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      problems.push(`Line ${idx + 1}: "${email}" does not look like an email address`);
+      return;
+    }
+
+    rows.push({
+      full_name, position,
+      email: email || '',
+      phone: phone || '',
+      department: department || '',
+      employment_type: 'full_time',
+      temp_otp: generateTempOTP()
+    });
+  });
+
+  // A name appearing twice in the same paste is a copy-and-paste slip. Report
+  // it and drop the repeat, so the count in the preview is the truth.
+  const seen = new Set();
+  const deduped = rows.filter(r => {
+    const key = `${r.full_name}|${r.position}`.toLowerCase();
+    if (seen.has(key)) {
+      problems.push(`${r.full_name} (${r.position}) appears more than once — the repeat was dropped`);
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+
+  return { rows: deduped, problems };
+}
+
+function previewBulkImport() {
+  const text = document.getElementById('bulkPaste').value;
+  const summary = document.getElementById('bulkSummary');
+  const result = document.getElementById('bulkResult');
+  const importBtn = document.getElementById('bulkImportBtn');
+
+  if (!text.trim()) {
+    summary.textContent = 'Nothing pasted yet.';
+    importBtn.classList.add('hidden');
+    result.innerHTML = '';
+    return;
+  }
+
+  const { rows, problems } = parseBulkPaste(text);
+  bulkParsed = rows;
+
+  summary.textContent = `${rows.length} ready` + (problems.length ? `, ${problems.length} to fix` : '');
+  importBtn.classList.toggle('hidden', rows.length === 0);
+
+  result.innerHTML = `
+    ${problems.length ? `
+      <div class="notice">
+        <div>
+          <strong>These lines were left out:</strong>
+          <ul style="margin:6px 0 0; padding-left:18px;">
+            ${problems.map(p => `<li>${escapeHtml(p)}</li>`).join('')}
+          </ul>
+        </div>
+      </div>` : ''}
+    ${rows.length ? `
+      <div class="table-wrap" style="margin-top:12px;">
+        <table class="table">
+          <thead><tr><th>Name</th><th>Position</th><th>Email</th><th>Department</th></tr></thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr>
+                <td>${escapeHtml(r.full_name)}</td>
+                <td>${escapeHtml(r.position)}</td>
+                <td>${escapeHtml(r.email || '—')}</td>
+                <td>${escapeHtml(r.department || '—')}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <p class="muted" style="margin-top:8px;">
+        Worker IDs are assigned automatically, continuing from the highest already on file.
+      </p>` : ''}`;
+}
+
+async function runBulkImport() {
+  if (!bulkParsed.length) return;
+
+  const btn = document.getElementById('bulkImportBtn');
+  btn.disabled = true;
+
+  try {
+    const results = await rpc('admin_bulk_add_employees', {
+      p_token: adminSessionToken,
+      p_rows: bulkParsed
+    });
+
+    const added = (results || []).filter(r => r.outcome === 'added');
+    const skipped = (results || []).filter(r => r.outcome !== 'added');
+
+    document.getElementById('bulkResult').innerHTML = `
+      <div class="notice ${added.length ? 'ok' : ''}">
+        <div>
+          <strong>${added.length} added${skipped.length ? `, ${skipped.length} skipped` : ''}.</strong>
+          ${added.length ? ' Save the codes below now — they cannot be shown again.' : ''}
+        </div>
+      </div>
+      ${added.length ? `
+        <div style="margin:12px 0;">
+          <button type="button" class="btn primary sm" id="bulkDownloadBtn">Download the codes</button>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>Worker ID</th><th>Name</th><th>One-time code</th></tr></thead>
+            <tbody>
+              ${added.map(r => `
+                <tr>
+                  <td class="mono">${escapeHtml(r.worker_id)}</td>
+                  <td>${escapeHtml(r.full_name)}</td>
+                  <td class="mono"><strong>${escapeHtml(r.temp_otp)}</strong></td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>` : ''}
+      ${skipped.length ? `
+        <div class="table-wrap" style="margin-top:12px;">
+          <table class="table">
+            <thead><tr><th>Name</th><th>Why it was skipped</th></tr></thead>
+            <tbody>
+              ${skipped.map(r => `
+                <tr>
+                  <td>${escapeHtml(r.full_name || '—')}</td>
+                  <td>${escapeHtml(r.detail || 'Skipped')}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>` : ''}`;
+
+    const dl = document.getElementById('bulkDownloadBtn');
+    if (dl) {
+      dl.addEventListener('click', () => {
+        let csv = 'Worker ID,Name,One-time code\n';
+        added.forEach(r => {
+          csv += `${r.worker_id},"${(r.full_name || '').replace(/"/g, '""')}",${r.temp_otp}\n`;
+        });
+        downloadCSV(csv, 'STA_Staff_Sign_In_Codes.csv');
+      });
+    }
+
+    document.getElementById('bulkPaste').value = '';
+    document.getElementById('bulkSummary').textContent = '';
+    btn.classList.add('hidden');
+    bulkParsed = [];
+    loadEmployees();
+  } catch (err) {
+    showToast(err?.message || 'The import did not go through.', 'error');
+  } finally {
+    btn.disabled = false;
   }
 }

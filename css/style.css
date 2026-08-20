@@ -799,3 +799,11 @@ tbody tr:hover { background: var(--surface-2); }
   border: 1px solid var(--warning);
   border-radius: var(--r);
 }
+
+/* A notice reporting something that went right. The base .notice is a
+   warning; this is its counterpart for a successful import. */
+.notice.ok {
+  background: var(--success-soft);
+  border-color: color-mix(in srgb, var(--success) 28%, transparent);
+  color: var(--success);
+}
