@@ -176,17 +176,17 @@ begin
     end if;
     if v_when < v_now - c_window then
       raise exception
-        'That clock-in is more than % old. Ask a supervisor to enter it.', c_window;
+        'That clock-in is more than % old. Ask your supervisor to enter it under Attendance.', c_window;
     end if;
 
     -- A queued action is only as trustworthy as the position saved with it.
     if p_lat is null or p_lng is null then
       raise exception
-        'This clock-in was saved while offline but without a location, so it cannot be verified. Ask a supervisor to enter it.';
+        'This clock-in was saved while offline but without a location, so it cannot be verified. Ask your supervisor to enter it under Attendance.';
     end if;
     if not public._geofence_available() then
       raise exception
-        'Offline clock-in needs a site boundary configured before it can be checked. Ask a supervisor to enter it.';
+        'Offline clock-in needs a site boundary configured before it can be checked. Ask your supervisor to enter it under Attendance.';
     end if;
   end if;
 

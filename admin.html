@@ -93,6 +93,57 @@
                 <div class="stat"><div class="k">Not arrived</div><div class="v" id="statAbsent">—</div></div>
             </div>
 
+            <div class="card" style="margin-bottom:var(--sp-4);">
+                <div class="card-head">
+                    <div>
+                        <h3 class="card-title">Enter or correct a day</h3>
+                        <p class="muted">
+                            For a missed clock-in — flat battery, forgotten tap, no signal.
+                            Corrections are recorded against your name.
+                        </p>
+                    </div>
+                </div>
+
+                <form id="manualAttendanceForm" novalidate>
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="manualEmployee">Member of staff</label>
+                            <select id="manualEmployee" required></select>
+                        </div>
+                        <div class="field">
+                            <label for="manualDate">Date</label>
+                            <input type="date" id="manualDate" required>
+                        </div>
+                    </div>
+
+                    <div id="manualExisting" class="notice hidden"></div>
+
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="manualIn">Started <span class="muted">(24-hour)</span></label>
+                            <input type="time" id="manualIn">
+                        </div>
+                        <div class="field">
+                            <label for="manualOut">Finished <span class="muted">(24-hour)</span></label>
+                            <input type="time" id="manualOut">
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label for="manualReason">Reason for the correction</label>
+                        <input type="text" id="manualReason" maxlength="300"
+                               placeholder="e.g. Phone battery died — arrival confirmed by head of department" required>
+                    </div>
+
+                    <label class="check" style="margin-bottom:var(--sp-3);">
+                        <input type="checkbox" id="manualClear">
+                        Clear whichever time I have left blank
+                    </label>
+
+                    <button type="submit" class="btn primary">Save the correction</button>
+                </form>
+            </div>
+
             <div class="card">
                 <div class="card-head">
                     <div>

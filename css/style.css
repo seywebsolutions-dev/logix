@@ -807,3 +807,14 @@ tbody tr:hover { background: var(--surface-2); }
   border-color: color-mix(in srgb, var(--success) 28%, transparent);
   color: var(--success);
 }
+
+/* A day a supervisor entered or corrected by hand. Marked wherever it
+   appears — a manual entry is an assertion, not an observation, and
+   should never read as a verified clock-in. */
+.badge.corrected {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
+  margin-left: 4px;
+  cursor: help;
+}

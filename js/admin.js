@@ -146,6 +146,7 @@ function showDashboard() {
   loadEmployees();
   loadAdminMessageBoard();
   loadSecurity();
+  initManualAttendance();
   switchTab('attendance');
   startRealtimeMessages();
 }
@@ -202,7 +203,12 @@ async function loadAttendance() {
             <td data-label="In" class="mono tnum">${formatTime(t?.clock_in)}</td>
             <td data-label="Out" class="mono tnum">${formatTime(t?.clock_out)}</td>
             <td data-label="Hours" class="mono tnum">${computeHours(t?.clock_in, t?.clock_out)}</td>
-            <td data-label="Status">${badge}</td>
+            <td data-label="Status">
+              ${badge}
+              ${t?.manual_entry
+                ? `<span class="badge corrected" title="${escapeHtml(t.manual_reason || 'Entered by an administrator')}">Corrected</span>`
+                : ''}
+            </td>
             <td data-label="">
               <button class="btn sm" onclick="exportEmployeeAttendanceCSV(${emp.id}, '${escapeHtml(emp.full_name).replace(/'/g, "\\'")}')">CSV</button>
             </td>
@@ -247,11 +253,12 @@ async function exportEmployeeAttendanceCSV(empId, empName) {
     if (error) throw error;
     if (!data?.length) { showToast(`No records for ${empName}.`, 'warning'); return; }
 
-    let csv = 'Date,Employee,Clock In,Clock Out,Hours,On Lunch\n';
+    let csv = 'Date,Employee,Clock In,Clock Out,Hours,On Lunch,Corrected,Reason\n';
     data.forEach(r => {
       csv += [
         r.date, empName, formatTime(r.clock_in), formatTime(r.clock_out),
-        computeHours(r.clock_in, r.clock_out), r.is_on_lunch ? 'Yes' : 'No'
+        computeHours(r.clock_in, r.clock_out), r.is_on_lunch ? 'Yes' : 'No',
+        r.manual_entry ? 'Yes' : '', r.manual_entry ? (r.manual_reason || '') : ''
       ].map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',') + '\n';
     });
 
@@ -273,12 +280,13 @@ async function exportAllAttendanceCSV() {
     const rows = attRes?.data || [];
     if (!rows.length) { showToast('No attendance recorded yet.', 'warning'); return; }
 
-    let csv = 'Date,Worker ID,Employee,Position,Clock In,Clock Out,Hours\n';
+    let csv = 'Date,Worker ID,Employee,Position,Clock In,Clock Out,Hours,Corrected,Reason\n';
     rows.forEach(r => {
       const e = empMap[r.employee_id] || {};
       csv += [
         r.date, e.worker_id || r.employee_id, e.full_name || '', e.position || '',
-        formatTime(r.clock_in), formatTime(r.clock_out), computeHours(r.clock_in, r.clock_out)
+        formatTime(r.clock_in), formatTime(r.clock_out), computeHours(r.clock_in, r.clock_out),
+        r.manual_entry ? 'Yes' : '', r.manual_entry ? (r.manual_reason || '') : ''
       ].map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',') + '\n';
     });
 
@@ -456,6 +464,7 @@ async function loadEmployees() {
     });
 
     renderEmployeesList();
+    fillManualEmployeeOptions(allEmployees);
   } catch (err) {
     showToast(err?.message || 'Could not load staff.', 'error');
   }
@@ -1163,5 +1172,146 @@ async function runBulkImport() {
     showToast(err?.message || 'The import did not go through.', 'error');
   } finally {
     btn.disabled = false;
+  }
+}
+
+/* ============================================================
+   Manual attendance entry
+   ------------------------------------------------------------
+   A missed clock-in used to be permanent: a flat battery or a
+   forgotten tap left a hole nothing could fill. A supervisor can
+   now enter or correct a day — but a correction is an assertion,
+   not an observation, so it always carries a reason and is shown
+   as corrected wherever it appears.
+   ============================================================ */
+
+function initManualAttendance() {
+  const dateEl = document.getElementById('manualDate');
+  if (!dateEl) return;
+
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Indian/Mahe' });
+  dateEl.max = today;
+  dateEl.value = today;
+
+  // Bound directly rather than through the `on` helper, which is scoped
+  // inside bindEvents and not visible out here.
+  const bind = (id, evt, fn) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener(evt, fn);
+  };
+
+  // Show what is already recorded before anything is overwritten.
+  bind('manualEmployee', 'change', loadManualExisting);
+  bind('manualDate', 'change', loadManualExisting);
+  bind('manualAttendanceForm', 'submit', saveManualAttendance);
+}
+
+// The staff dropdown mirrors the directory, so it is filled from the same
+// data rather than fetched twice.
+function fillManualEmployeeOptions(employees) {
+  const sel = document.getElementById('manualEmployee');
+  if (!sel) return;
+
+  const keep = sel.value;
+  sel.innerHTML = '<option value="">Choose…</option>' + employees.map(e =>
+    `<option value="${e.id}">${escapeHtml(e.worker_id)} — ${escapeHtml(e.full_name)}</option>`
+  ).join('');
+  if (keep) sel.value = keep;
+}
+
+async function loadManualExisting() {
+  const box = document.getElementById('manualExisting');
+  const empId = document.getElementById('manualEmployee').value;
+  const date = document.getElementById('manualDate').value;
+  if (!box) return;
+
+  if (!empId || !date) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+
+  try {
+    const rows = await rpc('admin_get_attendance_day', {
+      p_token: adminSessionToken,
+      p_employee_id: Number(empId),
+      p_date: date
+    });
+    const day = Array.isArray(rows) ? rows[0] : rows;
+
+    if (!day) {
+      box.className = 'notice';
+      box.innerHTML = '<div>Nothing is recorded for that day. Anything you enter will be a new record.</div>';
+      box.classList.remove('hidden');
+      document.getElementById('manualIn').value = '';
+      document.getElementById('manualOut').value = '';
+      return;
+    }
+
+    // Pre-fill so the supervisor edits what is there rather than retyping it.
+    document.getElementById('manualIn').value = trimSeconds(day.clock_in);
+    document.getElementById('manualOut').value = trimSeconds(day.clock_out);
+
+    box.className = 'notice';
+    box.innerHTML = `<div>
+      Currently recorded: <strong>${trimSeconds(day.clock_in) || 'no start'}</strong>
+      to <strong>${trimSeconds(day.clock_out) || 'no finish'}</strong>.
+      ${day.manual_entry
+        ? `<br>Already corrected by ${escapeHtml(day.manual_by || 'an administrator')}
+           — “${escapeHtml(day.manual_reason || '')}”`
+        : ''}
+    </div>`;
+    box.classList.remove('hidden');
+  } catch {
+    box.classList.add('hidden');
+  }
+}
+
+// Postgres hands back "08:15:00"; the time input wants "08:15".
+function trimSeconds(t) {
+  return t ? String(t).slice(0, 5) : '';
+}
+
+async function saveManualAttendance(e) {
+  e.preventDefault();
+
+  const empId = document.getElementById('manualEmployee').value;
+  const date = document.getElementById('manualDate').value;
+  const timeIn = document.getElementById('manualIn').value;
+  const timeOut = document.getElementById('manualOut').value;
+  const reason = document.getElementById('manualReason').value.trim();
+  const clear = document.getElementById('manualClear').checked;
+
+  if (!empId) { showToast('Choose a member of staff.', 'error'); return; }
+  if (!date) { showToast('Choose a date.', 'error'); return; }
+  if (!reason) { showToast('Give a reason — the record has to explain itself later.', 'error'); return; }
+  if (!timeIn && !timeOut && !clear) {
+    showToast('Enter a time, or tick the box to clear the day.', 'error');
+    return;
+  }
+  if (timeIn && timeOut && timeOut <= timeIn) {
+    showToast('The finish time must be after the start time.', 'error');
+    return;
+  }
+
+  const btn = e.target.querySelector('button[type="submit"]');
+  if (btn) btn.disabled = true;
+
+  try {
+    await rpc('admin_set_attendance', {
+      p_token: adminSessionToken,
+      p_employee_id: Number(empId),
+      p_date: date,
+      p_clock_in: timeIn || null,
+      p_clock_out: timeOut || null,
+      p_reason: reason,
+      p_clear_missing: clear
+    });
+
+    showToast('Correction saved and recorded in the audit trail.', 'success');
+    document.getElementById('manualReason').value = '';
+    document.getElementById('manualClear').checked = false;
+    loadManualExisting();
+    loadAttendance();
+  } catch (err) {
+    showToast(err?.message || 'Could not save that correction.', 'error');
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }

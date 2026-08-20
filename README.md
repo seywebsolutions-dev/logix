@@ -60,6 +60,8 @@ Open **SQL Editor** in the Supabase dashboard and run each file top to bottom. O
 | 6 | `database/password_security.sql` | bcrypt hashing, lockout, hashed one-time codes |
 | 7 | `database/leave_balances.sql` | Leave entitlements, public holidays, balance enforcement |
 | 8 | `database/offline_clockin.sql` | Lets a clock-in saved offline be sent later |
+| 9 | `database/bulk_staff_import.sql` | Add a whole staff list from a spreadsheet |
+| 10 | `database/manual_attendance.sql` | Supervisors can enter or correct a missed day |
 
 **Not used** — ignore these, they are from the old MySQL version or superseded:
 `logix.sql`, `upgrade_sta_professional.sql`, `seed.sql`, `security_rls_policies.sql`
@@ -214,6 +216,41 @@ bookmark. It needs HTTPS, which Vercel provides.
 
 When you change any file listed in `SHELL` at the top of `sw.js`, **bump the
 `CACHE` constant**, or browsers will keep serving the previous copy.
+
+## Corrections and manual entry
+
+Not every day gets recorded. A flat battery, a forgotten tap, a GPS fix that
+never arrived, or an offline clock-in older than the eighteen-hour window all
+leave a hole, and staff cannot fill it themselves.
+
+**Admin → Attendance → Enter or correct a day.** Pick the person and the date,
+and the form shows what is currently recorded before you change anything. A
+reason is required — the database refuses the correction without one, because a
+manual entry that does not explain itself is unauditable.
+
+A correction is a supervisor asserting something the system did not witness, so
+it is never disguised as a verified clock-in. Every corrected day is marked
+**Corrected** in the attendance table, carries a Corrected and Reason column in
+both CSV exports, and is written to the audit trail with who made it and when.
+
+Dates are limited to the past year, and a finish time must come after a start
+time. Leaving a time blank keeps whatever is already there; tick *Clear
+whichever time I have left blank* to genuinely remove one.
+
+## Adding staff in bulk
+
+**Admin → Staff → Import a whole list.** Paste from a spreadsheet, one person
+per line: name, position, then optionally email, phone and department. Only the
+first two are required.
+
+Worker IDs are assigned automatically from the highest `STA` number already on
+file. Nobody is overwritten — a row matching an existing email, or an existing
+name and position, is skipped and reported, so re-running a file or finishing a
+half-done import is safe. Up to 500 people at a time.
+
+**Check the list** shows what will happen before anything is written. After the
+import, the one-time codes are shown once and can be downloaded as a CSV to hand
+out. They are stored hashed and cannot be shown again.
 
 ## Troubleshooting
 
