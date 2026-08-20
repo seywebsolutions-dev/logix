@@ -8,7 +8,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
-    <base href="/logix/">
 </head>
 <body>
 
@@ -18,22 +17,65 @@
 <div class="auth-screen" id="loginScreen">
     <div class="auth-card neu">
         <div style="display:flex;align-items:center;gap:18px;margin-bottom:22px;">
-            <div class="brand-mark">LX</div>
+            <div class="lx-logo-box opt-1" style="width:52px; height:52px; font-size:20px;">LX</div>
             <div>
                 <h1 style="margin:0;font-size:24px;font-weight:700;">Logix</h1>
                 <p style="margin:0;font-size:12px;color:var(--text-muted);font-weight:500;letter-spacing:0.4px;">STA SEYCHELLES · EMPLOYEE PORTAL</p>
             </div>
         </div>
-        <p>Enter your Worker ID to access attendance, leave, and announcements.</p>
-        <form id="loginForm">
-            <div>
+        <p>Enter your Worker ID and Password to access your portal.</p>
+        <form id="loginForm" onsubmit="event.preventDefault(); return window.handleEmployeeLoginSubmit &amp;&amp; window.handleEmployeeLoginSubmit(event);">
+            <div style="margin-bottom: 14px;">
                 <label for="workerIdInput">Worker ID</label>
-                <input type="text" id="workerIdInput" placeholder="e.g. EMP001" autocomplete="off" required>
+                <input type="text" id="workerIdInput" placeholder="e.g. STA001" autocomplete="off" required>
+            </div>
+            <div style="margin-bottom: 14px;">
+                <label for="workerPasswordInput">Password / One-Time OTP</label>
+                <div style="position:relative; width:100%;">
+                    <input type="password" id="workerPasswordInput" placeholder="Enter password or OTP (e.g. STA-1234)" autocomplete="current-password" required style="padding-right:42px;">
+                    <button type="button" class="toggle-password-btn" data-target="workerPasswordInput" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:#64748b; padding:4px; line-height:1;" title="Show/Hide Password"></button>
+                </div>
             </div>
             <div class="error-text" id="loginError"></div>
-            <button type="submit" class="neu-btn gold">Continue</button>
+            <button type="submit" class="neu-btn gold">Sign In</button>
         </form>
         <a href="admin.html" class="hint-link">Administrator / Supervisor login →</a>
+    </div>
+</div>
+
+<!-- ============================================================
+     SCREEN 1B: Force Password Change (Windows / Enterprise Style)
+     ============================================================ -->
+<div class="auth-screen" id="forcePasswordScreen" style="display:none;">
+    <div class="auth-card neu" style="max-width:440px;">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px;">
+            <div class="lx-logo-box opt-1">LX</div>
+            <div>
+                <h2 style="margin:0;font-size:20px;font-weight:700;">Password Setup Required</h2>
+                <p style="margin:0;font-size:12px;color:var(--text-muted);font-weight:500;">FIRST LOGIN / ONE-TIME OTP RESET</p>
+            </div>
+        </div>
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:18px;">
+            For security, please create a new permanent password for your STA account before proceeding.
+        </p>
+        <form id="forcePasswordForm">
+            <div style="margin-bottom: 14px;">
+                <label for="newPasswordInput">New Password</label>
+                <div style="position:relative; width:100%;">
+                    <input type="password" id="newPasswordInput" placeholder="At least 6 characters" minlength="6" required style="padding-right:42px;">
+                    <button type="button" class="toggle-password-btn" data-target="newPasswordInput" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:#64748b; padding:4px; line-height:1;" title="Show/Hide Password"></button>
+                </div>
+            </div>
+            <div style="margin-bottom: 14px;">
+                <label for="confirmPasswordInput">Confirm New Password</label>
+                <div style="position:relative; width:100%;">
+                    <input type="password" id="confirmPasswordInput" placeholder="Re-type new password" minlength="6" required style="padding-right:42px;">
+                    <button type="button" class="toggle-password-btn" data-target="confirmPasswordInput" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:#64748b; padding:4px; line-height:1;" title="Show/Hide Password"></button>
+                </div>
+            </div>
+            <div class="error-text" id="forcePasswordError"></div>
+            <button type="submit" class="neu-btn gold">Save &amp; Continue</button>
+        </form>
     </div>
 </div>
 
@@ -44,7 +86,7 @@
 
     <div class="topbar">
         <div class="brand">
-            <div class="brand-mark">LX</div>
+            <div class="lx-logo-box opt-1">LX</div>
             <div>
                 <h1>Logix</h1>
                 <span>Employee Portal · STA Seychelles</span>
@@ -56,7 +98,7 @@
         </div>
     </div>
 
-    <div style="padding:28px 32px 0; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px;">
+    <div class="user-header-wrap" style="padding:20px 24px 12px; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px;">
         <div class="id-badge">
             <div class="id-avatar" id="idAvatarInitials">--</div>
             <div>
@@ -67,9 +109,8 @@
         </div>
         <div id="roleBadge" style="margin-bottom:4px;"></div>
     </div>
-    <br>
 
-    <div class="grid-2" style="padding:0 32px;">
+    <div class="grid-2" style="padding:12px 24px;">
         <!-- Clock card -->
         <div class="neu card">
             <div class="card-header">
@@ -121,7 +162,7 @@
         </div>
     </div>
 
-    <div class="grid-2" style="padding:24px 32px 40px;">
+    <div class="grid-2" style="padding:16px 24px 32px;">
         <!-- Leave request -->
         <div class="neu card">
             <h3 class="section-title">Leave request</h3>
@@ -176,13 +217,13 @@
     </div>
 </div>
 
-<script src="js/theme.js"></script>
+<script src="js/theme.js?v=9.2"></script>
 <script type="text/javascript">
-  window.LOGIX_SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
-  window.LOGIX_SUPABASE_ANON_KEY = 'public-anon-key';
+  window.LOGIX_SUPABASE_URL = 'https://hdsjsvpoomozxbtymhip.supabase.co';
+  window.LOGIX_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhkc2pzdnBvb21venhidHltaGlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MTA3NTQsImV4cCI6MjEwMDM4Njc1NH0.hCC4j39TskBFrxXpT_0HBIDIN7O4fIZaxd4oz0wrKrE';
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/helpers.js"></script>
-<script src="js/employee.js"></script>
+<script src="js/helpers.js?v=9.2"></script>
+<script src="js/employee.js?v=9.2"></script>
 </body>
 </html>

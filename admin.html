@@ -8,7 +8,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
-    <base href="/logix/">
 </head>
 <body>
 
@@ -18,21 +17,24 @@
 <div class="auth-screen" id="adminLoginScreen">
     <div class="auth-card neu">
         <div style="display:flex;align-items:center;gap:18px;margin-bottom:22px;">
-            <div class="brand-mark" style="background:linear-gradient(135deg,var(--danger) 0%, #991b1c 100%); box-shadow:0 4px 20px rgba(220,38,38,0.3);">LX</div>
+            <div class="lx-logo-box opt-1" style="width:52px; height:52px; font-size:20px;">LX</div>
             <div>
                 <h1 style="margin:0;font-size:24px;font-weight:700;">Logix Admin</h1>
                 <p style="margin:0;font-size:12px;color:var(--text-muted);font-weight:500;letter-spacing:0.4px;">STA SEYCHELLES · SUPERVISOR DASHBOARD</p>
             </div>
         </div>
         <p>Restricted access. Administrator and Supervisor only.</p>
-        <form id="adminLoginForm">
-            <div>
+        <form id="adminLoginForm" onsubmit="event.preventDefault(); return window.handleAdminLoginSubmit &amp;&amp; window.handleAdminLoginSubmit(event);">
+            <div style="margin-bottom: 14px;">
                 <label for="adminUsername">Username</label>
                 <input type="text" id="adminUsername" autocomplete="username" required placeholder="Enter your username">
             </div>
-            <div>
+            <div style="margin-bottom: 14px;">
                 <label for="adminPassword">Password</label>
-                <input type="password" id="adminPassword" autocomplete="current-password" required placeholder="Enter your password">
+                <div style="position:relative; width:100%;">
+                    <input type="password" id="adminPassword" autocomplete="current-password" required placeholder="Enter your password" style="padding-right:42px;">
+                    <button type="button" class="toggle-password-btn" data-target="adminPassword" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:#64748b; padding:4px; line-height:1;" title="Show/Hide Password"></button>
+                </div>
             </div>
             <div class="error-text" id="adminLoginError"></div>
             <button type="submit" class="neu-btn gold">Log in</button>
@@ -48,7 +50,7 @@
 
     <div class="topbar">
         <div class="brand">
-            <div class="brand-mark">LX</div>
+            <div class="lx-logo-box opt-1">LX</div>
             <div>
                 <h1>Logix</h1>
                 <span>Admin Dashboard · STA Seychelles</span>
@@ -65,6 +67,31 @@
         <button class="neu-btn tab-btn" data-tab="leaves">Leave</button>
         <button class="neu-btn tab-btn" data-tab="employees">Employees</button>
         <button class="neu-btn tab-btn" data-tab="board">Announcements</button>
+        <button class="neu-btn tab-btn" data-tab="audit">Audit Trail</button>
+    </div>
+
+    <!-- Mobile Bottom App Dock (Visible on Mobile View <= 768px) -->
+    <div class="mobile-bottom-nav">
+        <button class="mobile-nav-item active tab-btn" data-tab="attendance">
+            <span class="nav-icon">⏱️</span>
+            <span class="nav-label">Attendance</span>
+        </button>
+        <button class="mobile-nav-item tab-btn" data-tab="leaves">
+            <span class="nav-icon">🏖️</span>
+            <span class="nav-label">Leaves</span>
+        </button>
+        <button class="mobile-nav-item tab-btn" data-tab="employees">
+            <span class="nav-icon">👥</span>
+            <span class="nav-label">Staff</span>
+        </button>
+        <button class="mobile-nav-item tab-btn" data-tab="board">
+            <span class="nav-icon">📢</span>
+            <span class="nav-label">Board</span>
+        </button>
+        <button class="mobile-nav-item tab-btn" data-tab="audit">
+            <span class="nav-icon">📜</span>
+            <span class="nav-label">Audit</span>
+        </button>
     </div>
 
     <!-- ---------- Attendance ---------- -->
@@ -72,10 +99,14 @@
         <div class="neu card">
             <div class="card-header">
                 <div>
-                    <h3 class="section-title">Today &amp; this month</h3>
-                    <p class="muted">Clock times, current status, and attendance % for every active employee.</p>
+                    <h3 class="section-title">Today &amp; Attendance Directory</h3>
+                    <p class="muted">Live status, shift clock times, and real-time report exports for STA staff.</p>
                 </div>
-                <button class="neu-btn" id="refreshAttendanceBtn">Refresh</button>
+                <div class="header-action-group">
+                    <button class="neu-btn" id="exportPdfAttendanceBtn">🖨️ PDF Report</button>
+                    <button class="neu-btn gold" id="exportAllAttendanceBtn">📥 Export All CSV</button>
+                    <button class="neu-btn" id="refreshAttendanceBtn">🔄 Refresh</button>
+                </div>
             </div>
             <div style="overflow-x:auto;">
                 <table id="attendanceTable">
@@ -86,8 +117,8 @@
                             <th>Clock Out</th>
                             <th>Hours</th>
                             <th>Status</th>
-                            <th>Attendance %</th>
-                            <th>Export</th>
+                            <th>Presence</th>
+                            <th>Export Report</th>
                         </tr>
                     </thead>
                     <tbody id="attendanceTableBody"></tbody>
@@ -127,49 +158,151 @@
     <!-- ---------- Employees ---------- -->
     <div class="tab-panel" id="tab-employees">
         <div class="grid-2">
+            <!-- Add Employee Card -->
             <div class="neu card">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
                     <div>
-                        <h3 class="section-title">Add employee</h3>
-                        <p class="muted">Register a new staff member.</p>
+                        <h3 class="section-title">Add new employee</h3>
+                        <p class="muted">Register staff &amp; auto-generate one-time password OTP.</p>
                     </div>
                 </div>
-                <form id="addEmployeeForm" style="margin-top:16px; display:flex; flex-direction:column; gap:14px;">
-                    <div>
-                        <label for="newWorkerId">Worker ID</label>
-                        <input type="text" id="newWorkerId" placeholder="EMP" required>
+                <form id="addEmployeeForm" style="margin-top:16px; display:flex; flex-direction:column; gap:12px;">
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                        <div>
+                            <label for="newWorkerId">Worker ID</label>
+                            <input type="text" id="newWorkerId" placeholder="e.g. STA016" required>
+                        </div>
+                        <div>
+                            <label for="newFullName">Full name</label>
+                            <input type="text" id="newFullName" placeholder="Full name" required>
+                        </div>
+                    </div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                        <div>
+                            <label for="newDob">Date of Birth (Age)</label>
+                            <input type="date" id="newDob" required>
+                        </div>
+                        <div>
+                            <label for="newPosition">Position</label>
+                            <input type="text" id="newPosition" placeholder="e.g. Teacher" required>
+                        </div>
+                    </div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                        <div>
+                            <label for="newDepartment">Department</label>
+                            <select id="newDepartment"><option value="">Select department</option></select>
+                        </div>
+                        <div>
+                            <label for="newEmploymentType">Employment Type</label>
+                            <select id="newEmploymentType">
+                                <option value="full_time">Full Time</option>
+                                <option value="part_time">Part Time</option>
+                                <option value="contract">Contract</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                        <div>
+                            <label for="newEmail">Email (For OTP reset)</label>
+                            <input type="email" id="newEmail" placeholder="name@sta.sc" required>
+                        </div>
+                        <div>
+                            <label for="newPhone">Phone</label>
+                            <input type="tel" id="newPhone" placeholder="+248">
+                        </div>
                     </div>
                     <div>
-                        <label for="newFullName">Full name</label>
-                        <input type="text" id="newFullName" placeholder="e.g. Alex Rivera" required>
+                        <label for="newPhoto">Profile Photo (optional)</label>
+                        <input type="file" id="newPhoto" accept="image/*" style="font-size:12px;">
                     </div>
-                    <div>
-                        <label for="newPosition">Position / Role</label>
-                        <input type="text" id="newPosition" placeholder="e.g. Mathematics Teacher" required>
-                    </div>
-                    <div>
-                        <label for="newDepartment">Department</label>
-                        <select id="newDepartment"><option value="">—</option></select>
-                    </div>
-                    <div>
-                        <label for="newEmail">Email</label>
-                        <input type="email" id="newEmail" placeholder="name@sta.sc">
-                    </div>
-                    <div>
-                        <label for="newPhone">Phone</label>
-                        <input type="tel" id="newPhone" placeholder="+248">
-                    </div>
-                    <button type="submit" class="neu-btn gold" style="margin-top:4px;">Add employee</button>
+                    <button type="submit" class="neu-btn gold" style="margin-top:6px;">Add Employee &amp; Generate OTP</button>
                 </form>
             </div>
 
+            <!-- All Staff List Card -->
             <div class="neu card">
-                <div class="card-header">
-                    <h3 class="section-title">All staff</h3>
+                <div class="card-header" style="flex-wrap:wrap; gap:10px;">
+                    <div>
+                        <h3 class="section-title">All Staff Directory</h3>
+                        <p class="muted">Search, edit details, or trigger password resets.</p>
+                    </div>
                     <button class="neu-btn" id="refreshEmployeesBtn">Refresh</button>
+                </div>
+                <!-- Search & Filter Bar -->
+                <div style="margin: 12px 0 16px 0;">
+                    <input type="text" id="employeeSearchInput" placeholder="🔍 Search staff by name, ID, or position..." style="width:100%;">
                 </div>
                 <div id="employeesList"></div>
             </div>
+        </div>
+    </div>
+
+    <!-- Edit Employee Modal -->
+    <div id="editEmployeeModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:999; align-items:center; justify-content:center; padding:16px;">
+        <div class="neu card" style="max-width:540px; width:100%; max-height:90vh; overflow-y:auto; background:var(--bg);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                <h3 class="section-title" style="margin:0;">Edit Employee Profile</h3>
+                <button type="button" class="neu-btn icon-btn" id="closeEditModalBtn">✕</button>
+            </div>
+            <form id="editEmployeeForm" style="display:flex; flex-direction:column; gap:12px;">
+                <input type="hidden" id="editEmployeeId">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    <div>
+                        <label for="editWorkerId">Worker ID</label>
+                        <input type="text" id="editWorkerId" readonly style="opacity:0.7;">
+                    </div>
+                    <div>
+                        <label for="editFullName">Full Name</label>
+                        <input type="text" id="editFullName" required>
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    <div>
+                        <label for="editDob">Date of Birth</label>
+                        <input type="date" id="editDob">
+                    </div>
+                    <div>
+                        <label for="editPosition">Position</label>
+                        <input type="text" id="editPosition" required>
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    <div>
+                        <label for="editDepartment">Department</label>
+                        <select id="editDepartment"></select>
+                    </div>
+                    <div>
+                        <label for="editEmail">Email</label>
+                        <input type="email" id="editEmail" required>
+                    </div>
+                </div>
+                <div>
+                    <label for="editPhoto">Change Photo</label>
+                    <input type="file" id="editPhoto" accept="image/*" style="font-size:12px;">
+                </div>
+                <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:8px;">
+                    <button type="button" class="neu-btn" id="cancelEditModalBtn">Cancel</button>
+                    <button type="submit" class="neu-btn gold">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- OTP Reset Confirmation Modal -->
+    <div id="resetOtpModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:999; align-items:center; justify-content:center; padding:16px;">
+        <div class="neu card" style="max-width:420px; width:100%; text-align:center;">
+            <div style="font-size:36px; margin-bottom:8px;">🔑</div>
+            <h3 class="section-title" style="margin:0;">One-Time OTP Generated</h3>
+            <p style="font-size:13px; color:var(--text-secondary); margin:8px 0 16px 0;">
+                Give this temporary password to the employee. They will be forced to change it upon signing in.
+            </p>
+            <div class="neu-inset" style="padding:14px; font-size:22px; font-weight:700; letter-spacing:2px; color:var(--gold); margin-bottom:16px;" id="generatedOtpDisplay">
+                STA-XXXX
+            </div>
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:16px;" id="otpEmailNotice">
+                An email notification has also been dispatched.
+            </p>
+            <button type="button" class="neu-btn gold" id="closeOtpModalBtn" style="width:100%;">Done</button>
         </div>
     </div>
 
@@ -186,16 +319,41 @@
             </form>
             <div id="adminMessageBoard" style="margin-top:22px;"></div>
         </div>
+    <!-- ---------- Audit Trail ---------- -->
+    <div class="tab-panel" id="tab-audit">
+        <div class="neu card">
+            <div class="card-header">
+                <div>
+                    <h3 class="section-title">Government Audit Trail &amp; Compliance Logs</h3>
+                    <p class="muted">Immutable record of administrative operations, staff profile edits, and security events.</p>
+                </div>
+                <button class="neu-btn" id="refreshAuditBtn">🔄 Refresh Logs</button>
+            </div>
+            <div style="overflow-x:auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Administrator / Actor</th>
+                            <th>Action Type</th>
+                            <th>Target Employee</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody id="auditTableBody"></tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </div>
 
-<script src="js/theme.js"></script>
+<script src="js/theme.js?v=9.2"></script>
 <script type="text/javascript">
-  window.LOGIX_SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
-  window.LOGIX_SUPABASE_ANON_KEY = 'public-anon-key';
+  window.LOGIX_SUPABASE_URL = 'https://hdsjsvpoomozxbtymhip.supabase.co';
+  window.LOGIX_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhkc2pzdnBvb21venhidHltaGlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MTA3NTQsImV4cCI6MjEwMDM4Njc1NH0.hCC4j39TskBFrxXpT_0HBIDIN7O4fIZaxd4oz0wrKrE';
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/helpers.js"></script>
-<script src="js/admin.js"></script>
+<script src="js/helpers.js?v=9.2"></script>
+<script src="js/admin.js?v=9.2"></script>
 </body>
 </html>
