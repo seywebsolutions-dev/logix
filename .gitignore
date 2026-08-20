@@ -31,3 +31,5 @@ database/logix.sql
 database/seed.sql
 database/upgrade_sta_professional.sql
 database/security_rls_policies.sql
+
+.env*
