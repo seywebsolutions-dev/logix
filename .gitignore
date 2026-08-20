@@ -23,3 +23,11 @@ css/lx_logo_*.jpg
 css/sta_bg.jpg
 css/sta_logo.jpg
 css/sta_poster.jpg
+
+# Superseded SQL, kept on disk for reference only. Do NOT run these.
+# security_rls_policies.sql grants public read+update on employees
+# (including password_hash) - harden_auth_and_rls.sql replaces it.
+database/logix.sql
+database/seed.sql
+database/upgrade_sta_professional.sql
+database/security_rls_policies.sql
