@@ -678,17 +678,18 @@ tbody tr:hover { background: var(--surface-2); }
 }
 .app-loader.active { display: flex; }
 .loader-card { text-align: center; display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); }
-.spinner {
-  width: 30px; height: 30px;
-  border: 2.5px solid var(--border-strong);
-  border-top-color: var(--primary);
-  border-radius: 50%;
-  animation: spin .7s linear infinite;
+
+/* The clock is the loading indicator. A spinner turns whether or not
+   anything is happening; a ticking second tells you the page is alive,
+   and it is the one number a person about to clock in wants anyway. */
+.loader-clock {
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: -.02em;
+  color: var(--text);
+  line-height: 1;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
 .loader-text { font-size: 13.5px; font-weight: 550; color: var(--text-2); }
-.loader-track { width: 190px; height: 3px; background: var(--surface-3); border-radius: var(--r-full); overflow: hidden; }
-.loader-bar { height: 100%; width: 0; background: var(--primary); border-radius: var(--r-full); transition: width .3s var(--ease); }
 
 /* ============================================================
    Utilities
@@ -817,4 +818,17 @@ tbody tr:hover { background: var(--surface-2); }
   border: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
   margin-left: 4px;
   cursor: help;
+}
+
+/* Used while a short action is in flight. A slow fade is enough to say
+   "working" without implying a percentage that nothing is measuring. */
+.logo-mark.breathing { animation: breathe 1.4s ease-in-out infinite; }
+
+@keyframes breathe {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-mark.breathing { animation: none; opacity: .8; }
 }

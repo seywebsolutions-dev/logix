@@ -15,7 +15,7 @@
 
 // Bump this on every deploy that changes a shell file, or browsers
 // will keep serving the previous one.
-const CACHE = 'logix-shell-v1';
+const CACHE = 'logix-shell-v2';
 
 const SHELL = [
   '/',

@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   localStorage.removeItem('logix-admin-session');
   loginScreen.classList.remove('hidden');
   dashboard.classList.add('hidden');
+  dismissBootScreen();
 });
 
 function getStoredAdminSession() {
@@ -134,6 +135,7 @@ async function handleLogout() {
 function showDashboard() {
   loginScreen.classList.add('hidden');
   dashboard.classList.remove('hidden');
+  dismissBootScreen();
   initChrome();
 
   const who = document.getElementById('adminWhoami');

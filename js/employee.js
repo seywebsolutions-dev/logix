@@ -23,6 +23,7 @@ function showScreen(id) {
     const el = document.getElementById(s);
     if (el) el.classList.toggle('hidden', s !== id);
   });
+  dismissBootScreen();
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -692,7 +693,9 @@ function showLoading() {
     el = document.createElement('div');
     el.id = 'inlineLoading';
     el.className = 'app-loader';
-    el.innerHTML = '<div class="loader-card"><div class="spinner"></div></div>';
+    // The wordmark breathing, not a spinner. Same family as the sign-in
+    // loader, and it needs no CSS that pretends to measure progress.
+    el.innerHTML = '<div class="loader-card"><div class="logo-mark lg breathing">LX</div></div>';
     document.body.appendChild(el);
   }
   el.classList.add('active');

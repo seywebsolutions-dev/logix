@@ -17,6 +17,43 @@
 </head>
 <body>
 
+<style>
+/* Boot screen. Inlined so it paints on the first frame, before the
+   stylesheet or any script has arrived — on a slow mobile connection
+   the alternative is several seconds of blank white. Deliberately not
+   a spinner: nothing is being measured yet, so nothing pretends to be. */
+#bootScreen {
+  position: fixed; inset: 0; z-index: 900;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 14px;
+  background: #eef2f7; color: #0d1726;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  transition: opacity .25s ease;
+}
+#bootScreen[hidden] { display: none; }
+#bootScreen.done { opacity: 0; pointer-events: none; }
+#bootScreen .m {
+  width: 52px; height: 52px; border-radius: 14px;
+  background: linear-gradient(140deg, #0f4c75 0%, #08324e 100%);
+  color: #fff; display: grid; place-items: center;
+  font-weight: 750; font-size: 19px; letter-spacing: .5px;
+}
+#bootScreen .n { font-size: 17px; font-weight: 650; letter-spacing: -.01em; }
+#bootScreen .s { font-size: 13px; color: #5a6d86; }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) #bootScreen { background: #0e1622; color: #e8eef6; }
+  html:not([data-theme="light"]) #bootScreen .s { color: #8ba0b8; }
+}
+html[data-theme="dark"] #bootScreen { background: #0e1622; color: #e8eef6; }
+html[data-theme="dark"] #bootScreen .s { color: #8ba0b8; }
+</style>
+<div id="bootScreen">
+  <div class="m">LX</div>
+  <div class="n">Logix</div>
+  <div class="s">Seychelles Tourism Academy</div>
+</div>
+
+
 <!-- ============================================================
      Sign in
      ============================================================ -->

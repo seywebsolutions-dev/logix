@@ -190,44 +190,60 @@ function initAppLoaderMarkup() {
   const overlay = document.createElement('div');
   overlay.id = 'globalAppLoader';
   overlay.className = 'app-loader';
+  overlay.setAttribute('role', 'status');
+  overlay.setAttribute('aria-live', 'polite');
   overlay.innerHTML = `
     <div class="loader-card">
       <div class="logo-mark lg">LX</div>
-      <div class="spinner"></div>
+      <div class="loader-clock tnum" id="loaderClock">--:--:--</div>
       <div class="loader-text" id="loaderStatusMessage">Signing in…</div>
-      <div class="loader-track">
-        <div class="loader-bar" id="loaderProgressBar"></div>
-      </div>
     </div>
   `;
   document.body.appendChild(overlay);
 }
 
-function showAppLoader(message = 'Loading Logix Portal...', duration = 400, onComplete) {
+// The ticking second hand is the activity indicator. It is the honest one:
+// a spinner spins whether or not anything is happening, and the progress bar
+// this replaced filled on a timer with no connection to what was loading.
+// A clock is also the one thing a person about to clock in actually wants.
+let _loaderTimer = null;
+
+function startLoaderClock() {
+  const el = document.getElementById('loaderClock');
+  if (!el) return;
+  const tick = () => {
+    el.textContent = new Date().toLocaleTimeString('en-GB', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+  };
+  tick();
+  if (_loaderTimer) clearInterval(_loaderTimer);
+  _loaderTimer = setInterval(tick, 1000);
+}
+
+function stopLoaderClock() {
+  if (_loaderTimer) { clearInterval(_loaderTimer); _loaderTimer = null; }
+}
+
+function showAppLoader(message = 'Loading…', duration = 400, onComplete) {
   initAppLoaderMarkup();
   const overlay = document.getElementById('globalAppLoader');
   const statusEl = document.getElementById('loaderStatusMessage');
-  const barEl = document.getElementById('loaderProgressBar');
 
   if (statusEl) statusEl.textContent = message;
-  if (barEl) barEl.style.width = '0%';
   if (overlay) overlay.classList.add('active');
+  startLoaderClock();
 
-  // Smooth progress fill
-  setTimeout(() => { if (barEl) barEl.style.width = '45%'; }, 40);
-  setTimeout(() => { if (barEl) barEl.style.width = '85%'; }, duration * 0.5);
   setTimeout(() => {
-    if (barEl) barEl.style.width = '100%';
-    setTimeout(() => {
-      hideAppLoader();
-      if (typeof onComplete === 'function') onComplete();
-    }, 120);
+    hideAppLoader();
+    if (typeof onComplete === 'function') onComplete();
   }, duration);
 }
 
 function hideAppLoader() {
   const overlay = document.getElementById('globalAppLoader');
   if (overlay) overlay.classList.remove('active');
+  stopLoaderClock();
 }
 
 window.showAppLoader = showAppLoader;
@@ -444,3 +460,24 @@ if ('serviceWorker' in navigator) {
     });
   });
 }
+
+/* ============================================================
+   Boot screen
+   ------------------------------------------------------------
+   The markup is inlined at the top of each page so it paints on
+   the first frame. This takes it away once the app has something
+   real to show. Called by the pages themselves; the load event is
+   only a backstop, so a thrown error during start-up cannot leave
+   somebody staring at the wordmark for ever.
+   ============================================================ */
+function dismissBootScreen() {
+  const el = document.getElementById('bootScreen');
+  if (!el || el.hidden) return;
+  el.classList.add('done');
+  const remove = () => { el.hidden = true; };
+  el.addEventListener('transitionend', remove, { once: true });
+  setTimeout(remove, 400);   // in case the transition never fires
+}
+window.dismissBootScreen = dismissBootScreen;
+
+window.addEventListener('load', () => setTimeout(dismissBootScreen, 1500));
