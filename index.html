@@ -2,187 +2,315 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Logix — Employee Portal | STA Seychelles</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0f4c75">
+    <meta name="description" content="Employee portal for the Seychelles Tourism Academy — attendance, leave and announcements.">
+    <title>Employee Portal · Logix — STA Seychelles</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css">
-    <base href="/logix/">
+    <link rel="stylesheet" href="css/style.css?v=10">
 </head>
 <body>
 
 <!-- ============================================================
-     SCREEN 1: Worker ID entry
+     Sign in
      ============================================================ -->
 <div class="auth-screen" id="loginScreen">
-    <div class="auth-card neu">
-        <div style="display:flex;align-items:center;gap:18px;margin-bottom:22px;">
-            <div class="brand-mark">LX</div>
+    <main class="auth-card">
+        <div class="auth-head">
+            <div class="logo-mark lg">LX</div>
             <div>
-                <h1 style="margin:0;font-size:24px;font-weight:700;">Logix</h1>
-                <p style="margin:0;font-size:12px;color:var(--text-muted);font-weight:500;letter-spacing:0.4px;">STA SEYCHELLES · EMPLOYEE PORTAL</p>
+                <h1>Logix</h1>
+                <div class="eyebrow">STA Seychelles · Employee Portal</div>
             </div>
         </div>
-        <p>Enter your Worker ID to access attendance, leave, and announcements.</p>
-        <form id="loginForm">
-            <div>
+        <p class="lead">Sign in with your Worker ID to clock in, request leave and read academy announcements.</p>
+
+        <form id="loginForm" novalidate>
+            <div class="field">
                 <label for="workerIdInput">Worker ID</label>
-                <input type="text" id="workerIdInput" placeholder="e.g. EMP001" autocomplete="off" required>
+                <input type="text" id="workerIdInput" placeholder="e.g. STA001"
+                       autocomplete="username" autocapitalize="characters" spellcheck="false" required>
             </div>
-            <div class="error-text" id="loginError"></div>
-            <button type="submit" class="neu-btn gold">Continue</button>
+            <div class="field">
+                <label for="workerPasswordInput">Password or one-time code</label>
+                <div class="pw-wrap">
+                    <input type="password" id="workerPasswordInput" placeholder="Your password"
+                           autocomplete="current-password" required>
+                    <button type="button" class="pw-toggle" data-target="workerPasswordInput"
+                            aria-label="Show password"></button>
+                </div>
+            </div>
+            <div class="error-text" id="loginError" role="alert"></div>
+            <button type="submit" class="btn primary block lg">Sign in</button>
         </form>
-        <a href="admin.html" class="hint-link">Administrator / Supervisor login →</a>
-    </div>
+
+        <a href="admin.html" class="hint-link">Administrator &amp; supervisor sign-in →</a>
+    </main>
 </div>
 
 <!-- ============================================================
-     SCREEN 2: Employee dashboard
+     First-login password setup
      ============================================================ -->
-<div class="wrap" id="dashboardScreen" style="display:none;">
+<div class="auth-screen hidden" id="forcePasswordScreen">
+    <main class="auth-card">
+        <div class="auth-head">
+            <div class="logo-mark lg">LX</div>
+            <div>
+                <h1>Choose a password</h1>
+                <div class="eyebrow">First sign-in</div>
+            </div>
+        </div>
+        <p class="lead">Your account is using a temporary code. Set a permanent password to continue.</p>
 
-    <div class="topbar">
+        <form id="forcePasswordForm" novalidate>
+            <div class="field">
+                <label for="newPasswordInput">New password</label>
+                <div class="pw-wrap">
+                    <input type="password" id="newPasswordInput" placeholder="At least 8 characters"
+                           autocomplete="new-password" minlength="8" required>
+                    <button type="button" class="pw-toggle" data-target="newPasswordInput"
+                            aria-label="Show password"></button>
+                </div>
+                <p class="muted" style="margin-top:6px;">
+                    Use 8+ characters with an uppercase letter, a number and a symbol.
+                </p>
+            </div>
+            <div class="field">
+                <label for="confirmPasswordInput">Confirm password</label>
+                <div class="pw-wrap">
+                    <input type="password" id="confirmPasswordInput" placeholder="Re-enter your password"
+                           autocomplete="new-password" minlength="8" required>
+                    <button type="button" class="pw-toggle" data-target="confirmPasswordInput"
+                            aria-label="Show password"></button>
+                </div>
+            </div>
+            <div class="error-text" id="forcePasswordError" role="alert"></div>
+            <button type="submit" class="btn primary block lg">Save and continue</button>
+        </form>
+    </main>
+</div>
+
+<!-- ============================================================
+     Dashboard
+     ============================================================ -->
+<div class="app hidden" id="dashboardScreen">
+
+    <header class="topbar">
         <div class="brand">
-            <div class="brand-mark">LX</div>
+            <div class="logo-mark">LX</div>
             <div>
                 <h1>Logix</h1>
-                <span>Employee Portal · STA Seychelles</span>
+                <div class="eyebrow">Employee Portal</div>
             </div>
         </div>
         <div class="topbar-actions">
-            <button id="themeToggle" class="neu-btn icon-btn" title="Toggle dark mode">🌙</button>
-            <button id="switchUserBtn" class="neu-btn">Switch user</button>
+            <button id="themeToggle" class="btn icon ghost" aria-label="Switch between light and dark theme"></button>
+            <button id="switchUserBtn" class="btn sm">Sign out</button>
         </div>
-    </div>
+    </header>
 
-    <div style="padding:28px 32px 0; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px;">
-        <div class="id-badge">
-            <div class="id-avatar" id="idAvatarInitials">--</div>
+    <div class="container">
+
+        <section class="identity">
+            <div class="avatar" id="idAvatar">--</div>
             <div>
                 <h2 id="idFullName">—</h2>
-                <div class="position" id="idPosition">—</div>
-                <div class="worker-id" id="idWorkerId">—</div>
+                <div class="role" id="idPosition">—</div>
+                <div class="wid" id="idWorkerId">—</div>
             </div>
-        </div>
-        <div id="roleBadge" style="margin-bottom:4px;"></div>
-    </div>
-    <br>
+        </section>
 
-    <div class="grid-2" style="padding:0 32px;">
-        <!-- Clock card -->
-        <div class="neu card">
-            <div class="card-header">
-                <div>
-                    <h3 class="section-title">Time clock</h3>
-                    <p class="muted">Clock in when you arrive, clock out when you leave.</p>
-                </div>
-                <div class="status-pill neu-inset off" id="clockStatusPill" style="margin-top:0;">
-                    <span class="status-dot"></span> Not clocked in
-                </div>
-            </div>
-            <div class="clock-display">
-                <div class="clock-time" id="liveClock">--:--:--</div>
-                <div class="clock-date" id="liveDate">—</div>
-                <div class="clock-actions">
-                    <button class="neu-btn gold" id="clockInBtn">Clock In</button>
-                    <button class="neu-btn danger" id="clockOutBtn" disabled>Clock Out</button>
-                </div>
-            </div>
-        </div>
+        <div class="grid grid-2">
 
-        <!-- Lunch + attendance -->
-        <div>
-            <div class="neu card" style="margin-bottom:24px;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
+            <!-- Time clock -->
+            <section class="card">
+                <div class="card-head">
                     <div>
-                        <h3 class="section-title">Lunch status</h3>
-                        <p class="muted">Let your supervisor know when you're on break.</p>
+                        <h3 class="card-title">Time clock</h3>
+                        <p class="muted">Clock in when you arrive on campus.</p>
                     </div>
-                    <div style="text-align:right;">
-                        <strong id="lunchLabel" style="font-size:13px;color:var(--text-secondary)">Not on lunch</strong><br>
-                        <div class="switch neu-inset" id="lunchSwitch" style="margin:8px 0 0 auto;">
+                    <div class="status-pill off" id="clockStatusPill">
+                        <span class="dot"></span> Not clocked in
+                    </div>
+                </div>
+
+                <div class="clock">
+                    <div class="clock-time tnum" id="liveClock">--:--:--</div>
+                    <div class="clock-date" id="liveDate">—</div>
+                </div>
+
+                <div class="verify pending" id="verifyBanner">
+                    <span class="ico" aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+                    </span>
+                    <span id="verifyText">Checking that you are on the academy network…</span>
+                </div>
+
+                <div class="clock-actions">
+                    <button class="btn primary lg" id="clockInBtn">Clock in</button>
+                    <button class="btn danger lg" id="clockOutBtn" disabled>Clock out</button>
+                </div>
+            </section>
+
+            <div class="stack">
+                <!-- Lunch -->
+                <section class="card">
+                    <div class="switch-row">
+                        <div>
+                            <h3 class="card-title">Lunch break</h3>
+                            <p class="muted" id="lunchLabel">Not on lunch</p>
+                        </div>
+                        <div class="switch" id="lunchSwitch" role="switch" aria-checked="false" tabindex="0"
+                             aria-label="Toggle lunch break">
                             <div class="knob"></div>
                         </div>
                     </div>
-                </div>
-            </div>
+                </section>
 
-            <div class="neu card">
-                <h3 class="section-title">This month's attendance</h3>
-                <div class="attendance-ring-wrap">
-                    <div id="attendanceRingContainer"></div>
-                    <div class="attendance-copy">
-                        <div class="big" id="attendanceHeadline">—</div>
-                        <p class="muted">Working days present vs. working days this month.</p>
+                <!-- Attendance -->
+                <section class="card">
+                    <h3 class="card-title">This month</h3>
+                    <div class="ring-wrap" style="margin-top:var(--sp-4);">
+                        <div id="attendanceRingContainer"></div>
+                        <div class="ring-copy">
+                            <div class="big" id="attendanceHeadline">—</div>
+                            <p class="muted">Days present out of working days recorded this month.</p>
+                        </div>
                     </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="grid-2" style="padding:24px 32px 40px;">
-        <!-- Leave request -->
-        <div class="neu card">
-            <h3 class="section-title">Leave request</h3>
-            <p class="muted" style="margin-top:2px; margin-bottom:16px;">Submit a request for your supervisor to review.</p>
-            <form id="sickLeaveForm" style="display:flex; flex-direction:column; gap:14px;">
-                <div>
-                    <label for="leaveType">Leave type</label>
-                    <select id="leaveType">
-                        <option value="SL">Sick Leave</option>
-                        <option value="CL">Casual Leave</option>
-                        <option value="AL">Annual Leave</option>
-                        <option value="ML">Maternity Leave</option>
-                        <option value="PL">Paternity Leave</option>
-                        <option value="STL">Study Leave</option>
-                        <option value="EL">Emergency Leave</option>
-                    </select>
-                </div>
-                <div style="display:flex; gap:12px; flex-wrap:wrap;">
-                    <div style="flex:1 1 150px;">
-                        <label for="leaveStartDate">Start date</label>
-                        <input type="date" id="leaveStartDate" required>
-                    </div>
-                    <div style="flex:1 1 150px;">
-                        <label for="leaveEndDate">Rejoin date</label>
-                        <input type="date" id="leaveEndDate" required>
-                    </div>
-                </div>
-                <div>
-                    <label for="leaveReason">Reason (optional)</label>
-                    <textarea id="leaveReason" rows="3" placeholder="Briefly describe the situation..."></textarea>
-                </div>
-                <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:var(--text-secondary); font-weight:500;">
-                        <input type="checkbox" id="isHalfDay" style="width:auto;box-shadow:none;"> Half day
-                    </label>
-                    <span style="flex:1;"></span>
-                    <button type="submit" class="neu-btn gold">Submit request</button>
-                </div>
-            </form>
-            <div style="margin-top:22px;">
-                <h3 class="section-title" style="font-size:0.9rem;">Your recent requests</h3>
-                <div id="myLeaveList" style="margin-top:10px;"></div>
+                </section>
             </div>
         </div>
 
-        <!-- Announcements -->
-        <div class="neu card">
-            <h3 class="section-title">Announcements</h3>
-            <p class="muted" style="margin-top:2px; margin-bottom:16px;">Important updates from the administration.</p>
-            <div id="messageBoard"></div>
+        <div class="grid grid-2" style="margin-top:var(--sp-4);">
+
+            <!-- Leave -->
+            <section class="card">
+                <h3 class="card-title">Request leave</h3>
+                <p class="muted" style="margin-bottom:var(--sp-4);">Your supervisor reviews every request.</p>
+
+                <form id="sickLeaveForm" novalidate>
+                    <div class="field">
+                        <label for="leaveType">Type of leave</label>
+                        <select id="leaveType">
+                            <option value="SL">Sick leave</option>
+                            <option value="CL">Casual leave</option>
+                            <option value="AL">Annual leave</option>
+                            <option value="ML">Maternity leave</option>
+                            <option value="PL">Paternity leave</option>
+                            <option value="STL">Study leave</option>
+                            <option value="EL">Emergency leave</option>
+                        </select>
+                    </div>
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="leaveStartDate">First day away</label>
+                            <input type="date" id="leaveStartDate" required>
+                        </div>
+                        <div class="field">
+                            <label for="leaveEndDate">Returning on</label>
+                            <input type="date" id="leaveEndDate" required>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="leaveReason">Reason <span class="muted">(optional)</span></label>
+                        <textarea id="leaveReason" rows="3" placeholder="Briefly describe the situation…"></textarea>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:var(--sp-4); flex-wrap:wrap;">
+                        <label class="check">
+                            <input type="checkbox" id="isHalfDay"> Half day only
+                        </label>
+                        <span style="flex:1;"></span>
+                        <button type="submit" class="btn primary">Submit request</button>
+                    </div>
+                </form>
+
+                <h3 class="card-title" style="margin:var(--sp-6) 0 var(--sp-3);">Your requests</h3>
+                <div id="myLeaveList"></div>
+            </section>
+
+            <!-- Announcements -->
+            <section class="card">
+                <h3 class="card-title">Announcements</h3>
+                <p class="muted" style="margin-bottom:var(--sp-4);">Updates from academy management.</p>
+                <div id="messageBoard"></div>
+            </section>
+        </div>
+
+        <div class="grid grid-2" style="margin-top:var(--sp-4);">
+            <!-- Security -->
+            <section class="card">
+                <h3 class="card-title">Change your password</h3>
+                <p class="muted" style="margin-bottom:var(--sp-4);">
+                    Changing it signs you out on every other device.
+                </p>
+                <form id="changePasswordForm" novalidate>
+                    <div class="field">
+                        <label for="currentPassword">Current password</label>
+                        <div class="pw-wrap">
+                            <input type="password" id="currentPassword" autocomplete="current-password" required>
+                            <button type="button" class="pw-toggle" data-target="currentPassword"
+                                    aria-label="Show password"></button>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="changeNewPassword">New password</label>
+                        <div class="pw-wrap">
+                            <input type="password" id="changeNewPassword" autocomplete="new-password"
+                                   minlength="8" required>
+                            <button type="button" class="pw-toggle" data-target="changeNewPassword"
+                                    aria-label="Show password"></button>
+                        </div>
+                        <p class="muted" style="margin-top:6px;">
+                            8+ characters with an uppercase letter, a number and a symbol.
+                        </p>
+                    </div>
+                    <div class="field">
+                        <label for="changeConfirmPassword">Confirm new password</label>
+                        <div class="pw-wrap">
+                            <input type="password" id="changeConfirmPassword" autocomplete="new-password"
+                                   minlength="8" required>
+                            <button type="button" class="pw-toggle" data-target="changeConfirmPassword"
+                                    aria-label="Show password"></button>
+                        </div>
+                    </div>
+                    <div class="error-text" id="changePasswordError" role="alert"></div>
+                    <button type="submit" class="btn primary">Update password</button>
+                </form>
+            </section>
+
+            <!-- Forgot password guidance -->
+            <section class="card">
+                <h3 class="card-title">Forgotten your password?</h3>
+                <p class="muted" style="margin-bottom:var(--sp-4);">
+                    Passwords are stored so that nobody — including administrators — can read them.
+                    They can only be replaced.
+                </p>
+                <div class="row-item" style="display:block;">
+                    <div class="name">Ask an administrator for a reset</div>
+                    <div class="sub" style="margin-top:4px;">
+                        Contact the HR office or your head of department. They issue a one-time
+                        code valid for 48 hours. You set a new password the moment you sign in
+                        with it, and any other session is signed out.
+                    </div>
+                </div>
+                <p class="muted" style="margin-top:var(--sp-4);">
+                    Five wrong attempts locks an account for 15 minutes. If you are locked out,
+                    wait rather than keep trying.
+                </p>
+            </section>
         </div>
     </div>
 </div>
 
-<script src="js/theme.js"></script>
+<script src="js/theme.js?v=10"></script>
 <script type="text/javascript">
-  window.LOGIX_SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
-  window.LOGIX_SUPABASE_ANON_KEY = 'public-anon-key';
+  window.LOGIX_SUPABASE_URL = 'https://znoxdqxwgknybbtqjrfx.supabase.co';
+  window.LOGIX_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpub3hkcXh3Z2tueWJidHFqcmZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxNDYyOTIsImV4cCI6MjEwMTcyMjI5Mn0.j05O7VQK6_ZBjqZ6c-pBTGADlL5VTvyXM6eDXKMPKXM';
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/helpers.js"></script>
-<script src="js/employee.js"></script>
+<script src="js/helpers.js?v=10"></script>
+<script src="js/employee.js?v=10"></script>
 </body>
 </html>

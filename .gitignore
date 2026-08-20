@@ -1,0 +1,25 @@
+# Vercel
+.vercel
+
+# OS / editor cruft
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Local tooling
+.claude/
+node_modules/
+
+# Never commit secrets (service_role key, DB passwords, etc.)
+.env
+.env.*
+*.secret
+
+.vercel
+
+# Unused artwork from the pre-Supabase design (5.2 MB, referenced nowhere).
+# Kept on disk, excluded from the repo and the deploy.
+css/lx_logo_*.jpg
+css/sta_bg.jpg
+css/sta_logo.jpg
+css/sta_poster.jpg

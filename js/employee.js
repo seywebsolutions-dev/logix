@@ -1,262 +1,377 @@
 /**
  * ============================================================
- *  Logix — Employee dashboard, Supabase-backed
+ *  Logix — Employee portal
  * ============================================================
+ *  Every privileged action goes through a Postgres RPC with a
+ *  session token. The browser never decides who you are, and
+ *  never decides whether you are allowed to clock in — it only
+ *  reports its position and lets the server rule on it.
  */
 'use strict';
 
-const STORAGE_KEY = 'logix-employee';
 let currentEmployee = null;
+let sessionToken = null;
 let todayRecord = { clock_in: null, clock_out: null };
 let isOnLunch = false;
-let refreshAttendanceTimer = null;
+let lastEligibility = null;
+let eligibilityTimer = null;
 
-document.addEventListener('DOMContentLoaded', () => {
+const SCREENS = ['loginScreen', 'forcePasswordScreen', 'dashboardScreen'];
+
+function showScreen(id) {
+  SCREENS.forEach(s => {
+    const el = document.getElementById(s);
+    if (el) el.classList.toggle('hidden', s !== id);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
   startLiveClock();
   bindEvents();
-  injectAttendanceFont();
-  applySavedTheme();
 
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) {
+  const saved = getStoredSession();
+  if (saved && saved.token) {
     try {
-      const { worker_id } = JSON.parse(saved);
-      loginWithWorkerId(worker_id, true);
-    } catch { /* ignore */ }
+      const who = await rpc('whoami', { p_token: saved.token });
+      const row = Array.isArray(who) ? who[0] : who;
+      if (row) {
+        sessionToken = saved.token;
+        currentEmployee = row;
+        showDashboard();
+        return;
+      }
+    } catch { /* fall through */ }
+    clearStoredSession();
   }
+  showScreen('loginScreen');
 });
-
-function applySavedTheme() {
-  const saved = localStorage.getItem('logix-theme') || 'light';
-  document.documentElement.setAttribute('data-theme', saved);
-  const btn = document.getElementById('themeToggle');
-  if (btn) btn.textContent = saved === 'dark' ? '☀️' : '🌙';
-}
 
 function bindEvents() {
   document.getElementById('loginForm').addEventListener('submit', (e) => {
     e.preventDefault();
-    const workerId = document.getElementById('workerIdInput').value.trim();
-    if (workerId) loginWithWorkerId(workerId, false);
+    loginWithWorkerId(
+      document.getElementById('workerIdInput').value.trim(),
+      document.getElementById('workerPasswordInput').value
+    );
   });
 
-  document.getElementById('switchUserBtn').addEventListener('click', () => {
-    localStorage.removeItem(STORAGE_KEY);
-    currentEmployee = null;
-    document.getElementById('dashboardScreen').style.display = 'none';
-    document.getElementById('loginScreen').style.display = 'flex';
-    document.getElementById('workerIdInput').value = '';
-    clearSections();
-  });
-
+  document.getElementById('forcePasswordForm').addEventListener('submit', handleForcePasswordSubmit);
+  document.getElementById('switchUserBtn').addEventListener('click', signOut);
   document.getElementById('clockInBtn').addEventListener('click', () => doClock('in'));
   document.getElementById('clockOutBtn').addEventListener('click', () => doClock('out'));
-  document.getElementById('lunchSwitch').addEventListener('click', toggleLunch);
+
+  const lunch = document.getElementById('lunchSwitch');
+  lunch.addEventListener('click', toggleLunch);
+  lunch.addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleLunch(); }
+  });
+
   document.getElementById('sickLeaveForm').addEventListener('submit', submitLeave);
-  document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+  document.getElementById('changePasswordForm').addEventListener('submit', handleChangePassword);
 }
 
-/* ---------- Auth ---------- */
-async function loginWithWorkerId(workerId, silent) {
+async function handleChangePassword(e) {
+  e.preventDefault();
+  const errorEl = document.getElementById('changePasswordError');
+  errorEl.textContent = '';
+
+  const current = document.getElementById('currentPassword').value;
+  const next = document.getElementById('changeNewPassword').value;
+  const confirm = document.getElementById('changeConfirmPassword').value;
+
+  if (!current) { errorEl.textContent = 'Enter your current password.'; return; }
+  const check = validatePasswordComplexity(next);
+  if (!check.valid) { errorEl.textContent = check.message; return; }
+  if (next !== confirm) { errorEl.textContent = 'The new passwords do not match.'; return; }
+  if (next === current) { errorEl.textContent = 'That is already your current password.'; return; }
+
+  try {
+    await rpc('change_own_password', {
+      p_token: sessionToken,
+      p_current_password: current,
+      p_new_password: next
+    });
+    document.getElementById('changePasswordForm').reset();
+    showToast('Password updated. Other devices have been signed out.', 'success');
+  } catch (err) {
+    errorEl.textContent = err?.message || 'Could not change your password.';
+  }
+}
+
+/* ============================================================
+   Auth
+   ============================================================ */
+async function loginWithWorkerId(workerId, password) {
   const errorEl = document.getElementById('loginError');
   errorEl.textContent = '';
 
+  const raw = (workerId || '').trim();
+  if (!raw) { errorEl.textContent = 'Enter your Worker ID.'; return; }
+
+  const lower = raw.toLowerCase();
+  if (lower === 'admin' || lower === 'supervisor' || lower === 'admin@sta.sc') {
+    window.location.href = 'admin.html';
+    return;
+  }
+  if (!password) { errorEl.textContent = 'Enter your password or one-time code.'; return; }
+
+  let cleanId = raw.toUpperCase().replace(/\s+/g, '');
+  if (/^\d+$/.test(cleanId)) cleanId = 'STA' + cleanId.padStart(3, '0');
+
   try {
-    const { data, error } = await window.getSupabase()
-      .from('employees')
-      .select('*')
-      .eq('worker_id', workerId)
-      .eq('status', 'active')
-      .maybeSingle();
+    const result = await rpc('verify_login', {
+      p_identifier: cleanId, p_password: password, p_require_admin: false
+    });
+    const row = Array.isArray(result) ? result[0] : result;
 
-    if (error) throw error;
-    if (!data) {
-      const msg = 'Worker ID not found.';
-      if (!silent) errorEl.textContent = msg;
-      else localStorage.removeItem(STORAGE_KEY);
-      return;
-    }
+    if (!row) { errorEl.textContent = 'That Worker ID and password do not match.'; return; }
 
-    currentEmployee = data;
+    sessionToken = row.token;
+    currentEmployee = row;
+    storeSession({ token: row.token });
 
-    const { data: attendanceToday } = await window.getSupabase()
+    if (row.must_change_password) { showScreen('forcePasswordScreen'); return; }
+
+    showAppLoader('Signing in…', 320, showDashboard);
+  } catch (err) {
+    errorEl.textContent = err?.message || 'Could not sign in. Try again.';
+  }
+}
+
+async function handleForcePasswordSubmit(e) {
+  e.preventDefault();
+  const errorEl = document.getElementById('forcePasswordError');
+  errorEl.textContent = '';
+
+  const newPass = document.getElementById('newPasswordInput').value;
+  const confirmPass = document.getElementById('confirmPasswordInput').value;
+
+  const check = validatePasswordComplexity(newPass);
+  if (!check.valid) { errorEl.textContent = check.message; return; }
+  if (newPass !== confirmPass) { errorEl.textContent = 'Those passwords do not match.'; return; }
+
+  try {
+    await rpc('set_employee_password', { p_token: sessionToken, p_new_password: newPass });
+    currentEmployee.must_change_password = false;
+    showToast('Password saved.', 'success');
+    showDashboard();
+  } catch (err) {
+    errorEl.textContent = err?.message || 'Could not save your password. Try again.';
+  }
+}
+
+async function signOut() {
+  if (sessionToken) { try { await rpc('logout', { p_token: sessionToken }); } catch {} }
+  clearStoredSession();
+  currentEmployee = null;
+  sessionToken = null;
+  if (eligibilityTimer) { clearInterval(eligibilityTimer); eligibilityTimer = null; }
+  document.getElementById('workerIdInput').value = '';
+  document.getElementById('workerPasswordInput').value = '';
+  showScreen('loginScreen');
+}
+
+/* ============================================================
+   Dashboard
+   ============================================================ */
+function showDashboard() {
+  showScreen('dashboardScreen');
+  initChrome();
+
+  const initials = (currentEmployee.full_name || '??')
+    .split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+  document.getElementById('idAvatar').textContent = initials || '--';
+  document.getElementById('idFullName').textContent = currentEmployee.full_name || '—';
+  document.getElementById('idPosition').textContent = currentEmployee.position || '—';
+  document.getElementById('idWorkerId').textContent = currentEmployee.worker_id || '—';
+
+  const today = new Date().toISOString().split('T')[0];
+  const startEl = document.getElementById('leaveStartDate');
+  const endEl = document.getElementById('leaveEndDate');
+  if (startEl) startEl.min = today;
+  if (endEl) endEl.min = today;
+
+  refreshToday();
+  loadAttendance();
+  loadMyLeaveRequests();
+  startMessages();
+
+  refreshEligibility();
+  if (!eligibilityTimer) eligibilityTimer = setInterval(refreshEligibility, 60000);
+}
+
+async function refreshToday() {
+  try {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const { data, error } = await getSupabase()
       .from('attendance')
       .select('clock_in, clock_out, is_on_lunch')
       .eq('employee_id', currentEmployee.id)
+      .eq('date', todayStr)
       .maybeSingle();
+    if (error) throw error;
 
-    todayRecord = attendanceToday || { clock_in: null, clock_out: null };
-    isOnLunch = !!attendanceToday?.is_on_lunch;
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ worker_id: currentEmployee.worker_id }));
-    showDashboard();
-  } catch (err) {
-    if (!silent) showToast(err?.message || 'Could not reach server. Try again.', 'error');
-    localStorage.removeItem(STORAGE_KEY);
-  }
-}
-
-function showDashboard() {
-  document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('dashboardScreen').style.display = 'block';
-
-  const initials = (currentEmployee.full_name || '??').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
-  document.getElementById('idAvatarInitials').textContent = initials || '--';
-  document.getElementById('idFullName').textContent = currentEmployee.full_name || '—';
-  document.getElementById('idPosition').textContent = currentEmployee.position || '—';
-  document.getElementById('idWorkerId').textContent = 'ID: ' + currentEmployee.worker_id;
-
+    todayRecord = data || { clock_in: null, clock_out: null };
+    isOnLunch = !!data?.is_on_lunch;
+  } catch { /* non-fatal */ }
   updateClockUI();
   updateLunchUI();
-  loadAttendance();
-  loadMyLeaveRequests();
-  loadMessageBoard();
-
-  const dt = new Date();
-  document.getElementById('leaveDate').min = dt.toISOString().split('T')[0];
-  document.getElementById('leaveDate').max = new Date(dt.getFullYear(), dt.getMonth() + 1, 0).toISOString().split('T')[0];
 }
 
-function clearSections() {
-  ['attendanceHeadline', 'myLeaveList', 'messageBoard'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.innerHTML = '';
-  });
-  const ring = document.getElementById('attendanceRingContainer');
-  if (ring) ring.innerHTML = '';
-}
+/* ============================================================
+   On-site verification
+   ============================================================ */
+async function refreshEligibility() {
+  const banner = document.getElementById('verifyBanner');
+  const text = document.getElementById('verifyText');
+  if (!banner || !sessionToken) return;
 
-/* ---------- Live clock ---------- */
-function injectAttendanceFont() {
-  const link = document.createElement('link');
-  link.rel = 'preconnect';
-  link.href = 'https://fonts.googleapis.com';
-  if (link.href && !document.querySelector(`link[href="${link.href}"]`)) {
-    link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap';
-    document.head.appendChild(link);
+  try {
+    const pos = await getPosition();
+    const res = await rpc('check_clock_eligibility', {
+      p_token: sessionToken,
+      p_lat: pos ? pos.lat : null,
+      p_lng: pos ? pos.lng : null
+    });
+    lastEligibility = res;
+
+    if (!res.enforced) {
+      banner.className = 'verify pending';
+      text.innerHTML = '<strong>Site checks are not configured yet.</strong> Clock-ins are being accepted from anywhere until an administrator registers the campus network.';
+    } else if (res.allowed) {
+      banner.className = 'verify ok';
+      const near = res.distance_meters != null
+        ? ` You are about ${Math.round(res.distance_meters)} m from the campus centre.`
+        : '';
+      text.innerHTML = `<strong>Verified on site.</strong>${near}`;
+    } else {
+      banner.className = 'verify blocked';
+      const why = pos ? '' : ' Location access is switched off — turn it on and reload.';
+      text.innerHTML = `<strong>Not on the academy network.</strong> You can only clock in from campus.${why}`;
+    }
+  } catch (err) {
+    banner.className = 'verify pending';
+    text.textContent = 'Could not confirm your location right now.';
   }
+  updateClockUI();
 }
 
+/* ============================================================
+   Clock
+   ============================================================ */
 function startLiveClock() {
   const tick = () => {
     const now = new Date();
-    const timeEl = document.getElementById('liveClock');
-    const dateEl = document.getElementById('liveDate');
-    if (timeEl) timeEl.textContent = now.toLocaleTimeString('en-SC', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    if (dateEl) dateEl.textContent = now.toLocaleDateString('en-SC', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    const t = document.getElementById('liveClock');
+    const d = document.getElementById('liveDate');
+    if (t) t.textContent = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    if (d) d.textContent = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   };
   tick();
   setInterval(tick, 1000);
 }
 
-/* ---------- Clock ---------- */
 function updateClockUI() {
   const pill = document.getElementById('clockStatusPill');
-  const clockInBtn = document.getElementById('clockInBtn');
-  const clockOutBtn = document.getElementById('clockOutBtn');
+  const inBtn = document.getElementById('clockInBtn');
+  const outBtn = document.getElementById('clockOutBtn');
+  if (!pill || !inBtn || !outBtn) return;
 
-  if (!pill || !clockInBtn || !clockOutBtn) return;
+  const blocked = lastEligibility && lastEligibility.enforced && !lastEligibility.allowed;
 
   if (todayRecord.clock_in && !todayRecord.clock_out) {
-    pill.className = 'status-pill neu-inset on';
-    pill.innerHTML = `<span class="status-dot"></span> Clocked in — ${formatTime(todayRecord.clock_in)}`;
-    clockInBtn.disabled = true;
-    clockOutBtn.disabled = false;
+    pill.className = 'status-pill on';
+    pill.innerHTML = `<span class="dot"></span> On duty since ${formatTime(todayRecord.clock_in)}`;
+    inBtn.disabled = true;
+    outBtn.disabled = false;
   } else if (todayRecord.clock_in && todayRecord.clock_out) {
-    pill.className = 'status-pill neu-inset off';
-    pill.innerHTML = `<span class="status-dot"></span> Done for today (${formatTime(todayRecord.clock_in)} – ${formatTime(todayRecord.clock_out)})`;
-    clockInBtn.disabled = true;
-    clockOutBtn.disabled = true;
+    pill.className = 'status-pill';
+    pill.innerHTML = `<span class="dot"></span> ${formatTime(todayRecord.clock_in)} – ${formatTime(todayRecord.clock_out)}`;
+    inBtn.disabled = true;
+    outBtn.disabled = true;
   } else {
-    pill.className = 'status-pill neu-inset off';
-    pill.innerHTML = `<span class="status-dot"></span> Not clocked in`;
-    clockInBtn.disabled = false;
-    clockOutBtn.disabled = true;
+    pill.className = 'status-pill off';
+    pill.innerHTML = `<span class="dot"></span> Not clocked in`;
+    inBtn.disabled = !!blocked;
+    outBtn.disabled = true;
   }
+
+  inBtn.title = blocked ? 'You must be on the academy network to clock in.' : '';
 }
 
 async function doClock(action) {
   if (!currentEmployee) return;
+  const inBtn = document.getElementById('clockInBtn');
+  const outBtn = document.getElementById('clockOutBtn');
+  inBtn.disabled = true; outBtn.disabled = true;
+
   try {
-    const now = new Date();
-    const record = {
-      employee_id: currentEmployee.id,
-      date: now.toISOString().split('T')[0],
-      clock_in: action === 'in' ? now.toISOString() : todayRecord.clock_in ? new Date(todayRecord.clock_in.replace(' ', 'T')).toISOString() : null,
-      clock_out: action === 'out' ? now.toISOString() : todayRecord.clock_out ? new Date(todayRecord.clock_out.replace(' ', 'T')).toISOString() : null,
-      updated_at: now.toISOString()
-    };
+    const pos = await getPosition();
+    const data = await rpc('clock_action', {
+      p_token: sessionToken,
+      p_action: action,
+      p_lat: pos ? pos.lat : null,
+      p_lng: pos ? pos.lng : null,
+      p_accuracy: pos ? pos.accuracy : null
+    });
 
-    const { data, error } = await window.getSupabase()
-      .from('attendance')
-      .upsert(record, { onConflict: ['employee_id', 'date'] })
-      .select()
-      .single();
-
-    if (error) throw error;
+    todayRecord.clock_in = data.clock_in;
+    todayRecord.clock_out = data.clock_out;
 
     if (action === 'in') {
-      todayRecord.clock_in = data.clock_in;
-      todayRecord.clock_out = data.clock_out;
       showToast(`Clocked in at ${formatTime(data.clock_in)}.`, 'success');
     } else {
-      todayRecord.clock_out = data.clock_out;
       isOnLunch = false;
       updateLunchUI();
       showToast(`Clocked out at ${formatTime(data.clock_out)}.`, 'success');
     }
-
-    updateClockUI();
     loadAttendance();
   } catch (err) {
-    showToast(err?.message || 'Clock failed.', 'error');
+    showToast(err?.message || 'Could not record that.', 'error');
+  } finally {
+    updateClockUI();
+    refreshEligibility();
   }
 }
 
-/* ---------- Lunch ---------- */
+/* ============================================================
+   Lunch
+   ============================================================ */
 function updateLunchUI() {
   const sw = document.getElementById('lunchSwitch');
   const label = document.getElementById('lunchLabel');
   if (!sw || !label) return;
   sw.classList.toggle('on', isOnLunch);
-  label.textContent = isOnLunch ? 'On lunch' : 'Not on lunch';
+  sw.setAttribute('aria-checked', String(isOnLunch));
+  label.textContent = isOnLunch ? 'On lunch now' : 'Not on lunch';
 }
 
 async function toggleLunch() {
   if (!todayRecord.clock_in || todayRecord.clock_out) {
-    showToast('You must be clocked in to toggle lunch.', 'warning');
+    showToast('Clock in first to record a lunch break.', 'warning');
     return;
   }
+  const next = !isOnLunch;
   try {
-    const now = new Date();
-    const next = !isOnLunch;
-    const patch = { is_on_lunch: next, updated_at: now.toISOString() };
-    if (next) patch.lunch_started_at = now.toISOString();
-    const { error } = await window.getSupabase()
-      .from('attendance')
-      .upsert({
-        employee_id: currentEmployee.id,
-        date: now.toISOString().split('T')[0],
-        ...patch
-      }, { onConflict: ['employee_id', 'date'] });
-    if (error) throw error;
+    await rpc('toggle_lunch', { p_token: sessionToken, p_on: next });
     isOnLunch = next;
     updateLunchUI();
-    showToast(next ? 'Lunch started.' : 'Lunch ended.', 'success');
+    showToast(next ? 'Lunch started.' : 'Welcome back.', 'success');
   } catch (err) {
-    showToast(err?.message || 'Could not update lunch.', 'error');
+    showToast(err?.message || 'Could not update lunch status.', 'error');
   }
 }
 
-/* ---------- Attendance ---------- */
+/* ============================================================
+   Attendance
+   ============================================================ */
 async function loadAttendance() {
   const now = new Date();
-  const y = now.getFullYear(), m = now.getMonth() + 1;
-  try {
-    const start = new Date(y, m - 1, 1).toISOString().split('T')[0];
-    const end = new Date(y, m, 0).toISOString().split('T')[0];
+  const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
 
-    const { data, error } = await window.getSupabase()
+  try {
+    const { data, error } = await getSupabase()
       .from('attendance')
       .select('clock_in, clock_out, date')
       .eq('employee_id', currentEmployee.id)
@@ -264,153 +379,158 @@ async function loadAttendance() {
       .lte('date', end);
     if (error) throw error;
 
-    const totalDays = data?.length || 0;
-    const presentDays = data?.filter(x => x.clock_in && x.clock_out).length || 0;
-    const pct = totalDays ? Math.round((presentDays / totalDays) * 100) : 0;
+    const total = data?.length || 0;
+    const present = data?.filter(x => x.clock_in && x.clock_out).length || 0;
+    const pct = total ? Math.round((present / total) * 100) : 0;
 
     const ring = document.getElementById('attendanceRingContainer');
     const headline = document.getElementById('attendanceHeadline');
-    if (ring) renderAttendanceRing(ring, pct);
-    if (headline) {
-      const label = pct >= 90 ? 'Excellent' : pct >= 75 ? 'Good' : pct >= 50 ? 'Fair' : 'Low';
-      headline.innerHTML = `<span style="color:${pct < 50 ? 'var(--danger)' : pct < 75 ? 'var(--warning)' : 'var(--success)'}">${pct}%</span> present <span class="muted" style="font-size:12px;font-weight:500;">· ${label}</span>`;
+    if (ring) {
+      const colour = pct >= 75 ? 'var(--success)' : pct >= 50 ? 'var(--warning)' : 'var(--danger)';
+      renderAttendanceRing(ring, pct, colour);
     }
-  } catch (err) {
-    showToast(err?.message || 'Could not load attendance.', 'error');
-  }
+    if (headline) {
+      headline.textContent = total
+        ? `${present} of ${total} days`
+        : 'No days recorded yet';
+    }
+  } catch { /* non-fatal */ }
 }
 
-/* ---------- Leave ---------- */
+/* ============================================================
+   Leave
+   ============================================================ */
 async function submitLeave(e) {
   e.preventDefault();
   if (!currentEmployee) return;
-  const leaveType = document.getElementById('leaveType')?.value || 'SL';
-  const startDate = document.getElementById('leaveStartDate')?.value;
-  const endDate = document.getElementById('leaveEndDate')?.value;
-  const isHalfDay = !!document.getElementById('isHalfDay')?.checked;
-  const reason = (document.getElementById('leaveReason')?.value || '').trim();
 
-  if (!startDate || !endDate) { showToast('Please select start and rejoin dates.', 'error'); return; }
-  if (endDate < startDate) { showToast('Rejoin date cannot be before start date.', 'error'); return; }
+  const type = document.getElementById('leaveType').value;
+  const start = document.getElementById('leaveStartDate').value;
+  const end = document.getElementById('leaveEndDate').value;
+  const halfDay = document.getElementById('isHalfDay').checked;
+  const reason = document.getElementById('leaveReason').value.trim();
+
+  if (!start || !end) { showToast('Choose both dates.', 'error'); return; }
+  if (end < start) { showToast('The return date cannot be before the first day away.', 'error'); return; }
 
   try {
     showLoading();
-    const { data, error } = await window.getSupabase()
-      .from('leave_requests')
-      .insert({
-        employee_id: currentEmployee.id,
-        leave_type_id: (await window.getSupabase().from('leave_types').select('id').eq('code', leaveType).single()).data.id,
-        start_date: startDate,
-        end_date: endDate,
-        reason,
-        is_half_day: isHalfDay
-      })
-      .select()
-      .single();
-    if (error) throw error;
-    showToast('Leave request submitted successfully.', 'success');
+    await rpc('submit_leave_request', {
+      p_token: sessionToken,
+      p_leave_code: type,
+      p_start: start,
+      p_end: end,
+      p_reason: reason,
+      p_half_day: halfDay
+    });
+    showToast('Request submitted for review.', 'success');
     document.getElementById('sickLeaveForm').reset();
     loadMyLeaveRequests();
   } catch (err) {
-    showToast(err?.message || 'Could not submit leave.', 'error');
+    showToast(err?.message || 'Could not submit your request.', 'error');
   } finally {
     hideLoading();
   }
 }
 
-function showLoading() {
-  let el = document.getElementById('app-loading');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'app-loading';
-    el.innerHTML = '<div class="loading"><div class="spinner"></div> Work&hellip;</div>';
-    document.body.appendChild(el);
-  }
-  el.style.display = 'flex';
-}
-function hideLoading() {
-  const el = document.getElementById('app-loading');
-  if (el) el.style.display = 'none';
-}
-
 async function loadMyLeaveRequests() {
-  if (!currentEmployee) return;
+  const container = document.getElementById('myLeaveList');
+  if (!container || !currentEmployee) return;
+
   try {
-    const { data, error } = await window.getSupabase()
+    const { data, error } = await getSupabase()
       .from('leave_requests')
-      .select('id,leave_type_id,start_date,end_date,reason,status,is_half_day,review_comment,leave_types(code)');
+      .select('id,start_date,end_date,reason,status,is_half_day,review_comment,leave_types(code,name)')
+      .eq('employee_id', currentEmployee.id)
+      .order('requested_at', { ascending: false })
+      .limit(15);
     if (error) throw error;
 
-    const container = document.getElementById('myLeaveList');
-    if (!container) return;
     if (!data || !data.length) {
       container.innerHTML = '<div class="empty-state">No requests yet.</div>';
       return;
     }
 
-    const colorMap = { SL: 'danger', CL: 'info', ML: 'info', PL: 'info', AL: 'success', STL: 'warning', EL: 'warning' };
-
     container.innerHTML = data.map(r => {
-      const badge = colorMap[r.leave_types?.code || 'LV'] || 'info';
-      const dateText = r.start_date === r.end_date ? formatDate(r.start_date) : `${formatDate(r.start_date)} — ${formatDate(r.end_date)}`;
+      const dates = r.start_date === r.end_date
+        ? formatDate(r.start_date)
+        : `${formatDate(r.start_date)} → ${formatDate(r.end_date)}`;
       return `
-        <div class="neu-inset message-item" style="margin-bottom:10px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
-            <div>
-              <span class="pill ${badge}">${escapeHtml(r.leave_types?.code || 'LV')}</span>
-              <strong style="margin-left:8px">${dateText}</strong>
-              ${r.is_half_day ? '<span class="pill warning" style="margin-left:6px;">Half day</span>' : ''}
+        <div class="row-item">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span class="badge info">${escapeHtml(r.leave_types?.code || 'LV')}</span>
+              <span class="name">${dates}</span>
+              ${r.is_half_day ? '<span class="badge">Half day</span>' : ''}
             </div>
-            <span class="pill ${r.status}">${r.status}</span>
+            ${r.reason ? `<div class="sub" style="margin-top:4px;">${escapeHtml(r.reason)}</div>` : ''}
+            ${r.review_comment ? `<div class="tiny" style="margin-top:4px;">Reviewer: ${escapeHtml(r.review_comment)}</div>` : ''}
           </div>
-          ${r.reason ? `<div class="muted" style="font-size:0.85rem; margin-top:8px;">${escapeHtml(r.reason)}</div>` : ''}
-          ${r.review_comment ? `<div style="font-size:0.85rem; margin-top:8px; color:var(--text-secondary);"><strong>Admin:</strong> ${escapeHtml(r.review_comment)}</div>` : ''}
+          <span class="badge ${r.status}">${escapeHtml(r.status)}</span>
         </div>`;
     }).join('');
-  } catch (err) {
-    showToast(err?.message || 'Could not load leave requests.', 'error');
+  } catch {
+    container.innerHTML = '<div class="empty-state">Could not load your requests.</div>';
   }
 }
 
-/* ---------- Message board ---------- */
+/* ============================================================
+   Announcements
+   ============================================================ */
 async function loadMessageBoard() {
+  const container = document.getElementById('messageBoard');
+  if (!container) return;
+
   try {
-    const { data, error } = await window.getSupabase()
+    const { data, error } = await getSupabase()
       .from('messages')
-      .select('id,title,body,priority,published,created_at,author:employees(full_name)')
+      .select('id,title,body,created_at,author:employees(full_name)')
       .eq('published', true)
       .order('created_at', { ascending: false })
       .limit(20);
     if (error) throw error;
 
-    const container = document.getElementById('messageBoard');
-    if (!container) return;
     if (!data || !data.length) {
       container.innerHTML = '<div class="empty-state">No announcements yet.</div>';
       return;
     }
 
     container.innerHTML = data.map(m => `
-      <div style="padding:16px 20px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:12px;">
-        <div style="font-size:11px; color:var(--text-muted); font-weight:500; letter-spacing:0.3px; margin-bottom:6px;">
-          ${escapeHtml((m.author && m.author.full_name) || 'System')} · ${formatDate(m.created_at)}
-        </div>
-        <div style="font-size:13px; color:var(--text-primary); line-height:1.55; margin-bottom:4px;">${escapeHtml(m.title || '')}</div>
-        <div style="font-size:14px; color:var(--text-primary); line-height:1.55;">${escapeHtml(m.body || '')}</div>
-      </div>
+      <article class="announcement">
+        <div class="meta">${escapeHtml(m.author?.full_name || 'Management')} · ${formatDate(m.created_at)}</div>
+        <div class="body">${escapeHtml(m.body || '')}</div>
+      </article>
     `).join('');
-  } catch (err) {
-    showToast(err?.message || 'Could not load messages.', 'error');
+  } catch {
+    container.innerHTML = '<div class="empty-state">Could not load announcements.</div>';
   }
 }
 
-/* ---------- Theme ---------- */
-function toggleTheme() {
-  const body = document.documentElement;
-  const isDark = body.getAttribute('data-theme') === 'dark';
-  const next = isDark ? 'light' : 'dark';
-  body.setAttribute('data-theme', next);
-  localStorage.setItem('logix-theme', next);
-  const btn = document.getElementById('themeToggle');
-  if (btn) btn.textContent = next === 'dark' ? '☀️' : '🌙';
+function startMessages() {
+  loadMessageBoard();
+  try {
+    const client = getSupabase();
+    if (client && typeof client.channel === 'function') {
+      client.channel('employee-messages')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, loadMessageBoard)
+        .subscribe();
+    }
+  } catch { /* realtime optional */ }
+}
+
+/* ---------- Small loading overlay ---------- */
+function showLoading() {
+  let el = document.getElementById('inlineLoading');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'inlineLoading';
+    el.className = 'app-loader';
+    el.innerHTML = '<div class="loader-card"><div class="spinner"></div></div>';
+    document.body.appendChild(el);
+  }
+  el.classList.add('active');
+}
+function hideLoading() {
+  const el = document.getElementById('inlineLoading');
+  if (el) el.classList.remove('active');
 }

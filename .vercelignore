@@ -1,0 +1,8 @@
+# Never ship these to the CDN — nothing references them.
+css/lx_logo_*.jpg
+css/sta_bg.jpg
+css/sta_logo.jpg
+css/sta_poster.jpg
+
+.claude/
+*.zip
