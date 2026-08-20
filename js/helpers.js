@@ -348,7 +348,11 @@ function validatePasswordComplexity(pwd) {
   if (!/[A-Z]/.test(pwd)) return { valid: false, message: 'Password must contain at least 1 uppercase letter.' };
   if (!/[a-z]/.test(pwd)) return { valid: false, message: 'Password must contain at least 1 lowercase letter.' };
   if (!/[0-9]/.test(pwd)) return { valid: false, message: 'Password must contain at least 1 number.' };
-  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd)) return { valid: false, message: 'Password must contain at least 1 special character.' };
+  // Anything that is not a letter or digit counts, matching validate_password
+  // in the database. The narrower list here used to tell people that a password
+  // containing a space or a tilde had no symbol in it, which was untrue.
+  if (!/[^A-Za-z0-9]/.test(pwd)) return { valid: false, message: 'Password must contain at least 1 symbol, for example ! ? - or a space.' };
+  if (pwd.length > 72) return { valid: false, message: 'Password must be 72 characters or fewer.' };
   return { valid: true };
 }
 window.validatePasswordComplexity = validatePasswordComplexity;
