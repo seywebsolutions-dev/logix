@@ -708,3 +708,94 @@ tbody tr:hover { background: var(--surface-2); }
     transition-duration: .01ms !important;
   }
 }
+
+/* ============================================================
+   Leave balances
+   ------------------------------------------------------------
+   Sits above the request form so staff see what is left before
+   they pick dates. Figures come from the database, which is also
+   what enforces them.
+   ============================================================ */
+.leave-balances {
+  display: grid;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-5);
+}
+
+.leave-balances:empty { display: none; }
+
+.leave-balance {
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+
+.leave-balance-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-2);
+}
+
+.leave-balance-name {
+  font-size: .875rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.leave-balance-count {
+  font-size: .8125rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.leave-balance-count strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.leave-balance-bar {
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.leave-balance-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width .3s ease;
+}
+
+.leave-balance-note {
+  margin: var(--sp-2) 0 0;
+  font-size: .75rem;
+  color: var(--warning);
+}
+
+.leave-balance.low  { border-color: var(--warning); background: var(--warning-soft); }
+.leave-balance.none { border-color: var(--danger);  background: var(--danger-soft); }
+.leave-balance.none .leave-balance-count strong { color: var(--danger); }
+
+@media (prefers-reduced-motion: reduce) {
+  .leave-balance-bar > span { transition: none; }
+}
+
+/* Remaining allowance shown beside a pending request in the review table. */
+.balance-slot { font-variant-numeric: tabular-nums; }
+.balance-slot.balance-low  { color: var(--warning); font-weight: 600; }
+.balance-slot.balance-none { color: var(--danger);  font-weight: 600; }
+
+/* Held clock-ins waiting for the connection to come back. */
+.queue-banner {
+  margin: var(--sp-4) 0 0;
+  padding: var(--sp-3) var(--sp-4);
+  font-size: .8125rem;
+  color: var(--warning);
+  background: var(--warning-soft);
+  border: 1px solid var(--warning);
+  border-radius: var(--r);
+}

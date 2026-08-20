@@ -332,7 +332,7 @@ async function loadLeaves() {
   try {
     const { data, error } = await getSupabase()
       .from('leave_requests')
-      .select('id,start_date,end_date,reason,status,is_half_day,review_comment,employees(full_name,position,worker_id),leave_types(code,name)')
+      .select('id,employee_id,start_date,end_date,reason,status,is_half_day,review_comment,employees(full_name,position,worker_id),leave_types(code,name)')
       .order('requested_at', { ascending: false });
     if (error) throw error;
 
@@ -354,6 +354,9 @@ async function loadLeaves() {
           <td data-label="Type">
             <span class="badge info">${escapeHtml(r.leave_types?.name || 'Leave')}</span>
             <div class="sub" style="margin-top:4px;">${dates}${r.is_half_day ? ' · half day' : ''}</div>
+            ${r.status === 'pending' && r.leave_types?.code
+              ? `<div class="sub balance-slot" data-emp="${r.employee_id}" data-code="${escapeHtml(r.leave_types.code)}" data-year="${new Date(r.start_date).getFullYear()}"></div>`
+              : ''}
           </td>
           <td data-label="Reason">${escapeHtml(r.reason || '—')}</td>
           <td data-label="Status"><span class="badge ${r.status}">${escapeHtml(r.status)}</span></td>
@@ -367,9 +370,49 @@ async function loadLeaves() {
           </td>
         </tr>`;
     }).join('');
+
+    fillLeaveBalanceSlots();
   } catch (err) {
     showToast(err?.message || 'Could not load leave requests.', 'error');
   }
+}
+
+// Shows how much of the allowance is left next to each pending request, so a
+// decision is not made blind. One lookup per employee/year, not per row.
+async function fillLeaveBalanceSlots() {
+  const slots = Array.from(document.querySelectorAll('.balance-slot'));
+  if (!slots.length) return;
+
+  const keys = [...new Set(slots.map(el => `${el.dataset.emp}|${el.dataset.year}`))];
+
+  await Promise.all(keys.map(async key => {
+    const [empId, year] = key.split('|');
+    let rows;
+    try {
+      rows = await rpc('admin_leave_balances', {
+        p_token: adminSessionToken,
+        p_employee_id: Number(empId),
+        p_year: Number(year)
+      });
+    } catch {
+      return; // a missing balance should not break the review table
+    }
+
+    const byCode = new Map((rows || []).map(r => [r.leave_code, r]));
+
+    slots
+      .filter(el => el.dataset.emp === empId && el.dataset.year === year)
+      .forEach(el => {
+        const b = byCode.get(el.dataset.code);
+        if (!b) { el.textContent = 'No annual limit'; return; }
+
+        const available = Math.max((Number(b.remaining) || 0) - (Number(b.pending) || 0), 0);
+        const entitled = Number(b.entitled) || 0;
+        el.textContent = `${available} of ${entitled} days left`;
+        if (available <= 0) el.classList.add('balance-none');
+        else if (entitled > 0 && available / entitled <= 0.25) el.classList.add('balance-low');
+      });
+  }));
 }
 
 async function reviewLeave(id, status) {

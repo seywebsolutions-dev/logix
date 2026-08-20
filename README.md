@@ -58,6 +58,8 @@ Open **SQL Editor** in the Supabase dashboard and run each file top to bottom. O
 | 4 | `database/harden_auth_and_rls.sql` | **Real security.** Removes the open policies, locks down columns, moves every write behind session-checked functions |
 | 5 | `database/geofence_and_network.sql` | On-site clock-in enforcement |
 | 6 | `database/password_security.sql` | bcrypt hashing, lockout, hashed one-time codes |
+| 7 | `database/leave_balances.sql` | Leave entitlements, public holidays, balance enforcement |
+| 8 | `database/offline_clockin.sql` | Lets a clock-in saved offline be sent later |
 
 **Not used** — ignore these, they are from the old MySQL version or superseded:
 `logix.sql`, `upgrade_sta_professional.sql`, `seed.sql`, `security_rls_policies.sql`
@@ -149,11 +151,69 @@ js/helpers.js                Supabase client, session, RPC wrapper, toasts, geol
 js/employee.js               Employee portal logic
 js/admin.js                  Admin dashboard logic
 database/                    SQL migrations (see the table above)
+manifest.json                Makes the portal installable on a phone
+sw.js                        Service worker - keeps the page loading offline
+icons/                       App icons for the home screen
 ```
 
 The `.jpg` files in `css/` are unused leftovers from an earlier design — about 5.2 MB, referenced nowhere. They are listed in `.gitignore` and `.vercelignore`, so they stay on disk but are never committed or deployed. Delete them whenever you like.
 
 ---
+
+## Leave balances
+
+Every capped leave type carries an allowance. The database, not the browser,
+decides whether a request fits: `submit_leave_request` counts the working days
+being asked for — weekends and anything in `public_holidays` do not count — and
+refuses the request if the allowance will not cover it. Editing the page to
+re-enable the button achieves nothing.
+
+Staff see what is left above the request form. Supervisors see it beside each
+pending request, so approving is no longer done blind.
+
+Defaults come from `leave_types.max_days_per_year` (annual 21, sick 21, casual 5,
+emergency 5, study 10). Maternity and paternity are deliberately uncapped, being
+governed by statute rather than an annual allowance. To give one person a
+different allowance for one year, use `admin_set_entitlement`; it writes to
+`leave_entitlements` and is recorded in the audit trail.
+
+**Public holidays** are seeded with the fixed-date Seychelles holidays for 2026
+and 2027. **Check them against the official gazette before relying on them**, and
+add the movable feasts — Good Friday, Holy Saturday and Corpus Christi shift each
+year — with `admin_add_holiday`.
+
+## Working offline
+
+The campus WiFi drops. When it does the portal now keeps working: the service
+worker (`sw.js`) serves the page from cache, and a clock-in is stored on the
+device with the time and position at the moment of the tap. It is sent
+automatically when the connection returns, and a banner shows anything still
+waiting.
+
+Only genuine network failures are held. A refusal from the database — outside the
+geofence, expired session — is reported and dropped rather than retried forever.
+
+Two limits, by design:
+
+- A queued action is checked against the **geofence only**. The IP address seen
+  at sync time is wherever the person is then, which proves nothing about where
+  they were, so it is not used. A queued clock-in with no GPS fix, or one made
+  when no site boundary is configured, is **refused** rather than accepted
+  unverified.
+- Nothing older than **18 hours** is accepted. Beyond that a supervisor must
+  enter it.
+
+Every deferred entry is flagged in `clock_events.deferred`, with the sync time in
+`recorded_at`, so a supervisor can tell it apart from a live one.
+
+## Installing it on a phone
+
+`manifest.json` and the icons in `icons/` make the portal installable — Add to
+Home Screen on iOS, Install app on Android — so staff get an icon rather than a
+bookmark. It needs HTTPS, which Vercel provides.
+
+When you change any file listed in `SHELL` at the top of `sw.js`, **bump the
+`CACHE` constant**, or browsers will keep serving the previous copy.
 
 ## Troubleshooting
 

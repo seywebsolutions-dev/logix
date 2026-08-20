@@ -68,6 +68,9 @@ function bindEvents() {
 
   document.getElementById('sickLeaveForm').addEventListener('submit', submitLeave);
   document.getElementById('changePasswordForm').addEventListener('submit', handleChangePassword);
+
+  window.addEventListener('online', () => { updateQueueBanner(); flushClockQueue(); });
+  window.addEventListener('offline', updateQueueBanner);
 }
 
 async function handleChangePassword(e) {
@@ -194,7 +197,11 @@ function showDashboard() {
   refreshToday();
   loadAttendance();
   loadMyLeaveRequests();
+  loadLeaveBalances();
   startMessages();
+
+  updateQueueBanner();
+  flushClockQueue();
 
   refreshEligibility();
   if (!eligibilityTimer) eligibilityTimer = setInterval(refreshEligibility, 60000);
@@ -299,14 +306,114 @@ function updateClockUI() {
   inBtn.title = blocked ? 'You must be on the academy network to clock in.' : '';
 }
 
+const CLOCK_QUEUE_KEY = 'logix-clock-queue';
+
+// Campus WiFi drops. Rather than losing the tap, the action is held with the
+// position and the time it actually happened, and sent when the network comes
+// back. The server bounds how old a queued action may be and re-checks the
+// geofence against the saved position, so this is a delivery mechanism, not a
+// way around the rules.
+function readClockQueue() {
+  try { return JSON.parse(localStorage.getItem(CLOCK_QUEUE_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function writeClockQueue(items) {
+  try { localStorage.setItem(CLOCK_QUEUE_KEY, JSON.stringify(items)); }
+  catch { /* private mode or quota: nothing useful to do */ }
+}
+
+function queueClockAction(action, pos) {
+  const queue = readClockQueue();
+  queue.push({
+    action,
+    occurred_at: new Date().toISOString(),
+    lat: pos ? pos.lat : null,
+    lng: pos ? pos.lng : null,
+    accuracy: pos ? pos.accuracy : null,
+    worker_id: currentEmployee ? currentEmployee.worker_id : null
+  });
+  writeClockQueue(queue);
+  updateQueueBanner();
+}
+
+// Offline is the network being down, not the request having failed. A rejection
+// from Postgres (outside the geofence, session expired) must not be retried
+// forever, so only transport-level failures queue.
+function looksOffline(err) {
+  if (!navigator.onLine) return true;
+  const msg = String(err && err.message || err || '').toLowerCase();
+  return msg.includes('failed to fetch')
+      || msg.includes('networkerror')
+      || msg.includes('load failed')
+      || msg.includes('network request failed');
+}
+
+async function flushClockQueue() {
+  let queue = readClockQueue();
+  if (!queue.length || !sessionToken || !navigator.onLine) return;
+
+  const remaining = [];
+  let sent = 0;
+
+  for (const item of queue) {
+    // Someone else signed in on this device; their queued taps are not ours.
+    if (item.worker_id && currentEmployee && item.worker_id !== currentEmployee.worker_id) {
+      continue;
+    }
+    try {
+      await rpc('clock_action', {
+        p_token: sessionToken,
+        p_action: item.action,
+        p_lat: item.lat,
+        p_lng: item.lng,
+        p_accuracy: item.accuracy,
+        p_occurred_at: item.occurred_at
+      });
+      sent++;
+    } catch (err) {
+      if (looksOffline(err)) {
+        remaining.push(item);   // still no network — keep for next time
+      } else {
+        // The server refused it. Say why once, then drop it: retrying a
+        // rejected action just repeats the same refusal every load.
+        showToast(err?.message || 'A saved clock-in could not be recorded.', 'error');
+      }
+    }
+  }
+
+  writeClockQueue(remaining);
+  updateQueueBanner();
+
+  if (sent) {
+    showToast(sent === 1
+      ? 'Your saved clock-in has been recorded.'
+      : `${sent} saved clock-ins have been recorded.`, 'success');
+    refreshToday();
+    loadAttendance();
+  }
+}
+
+function updateQueueBanner() {
+  const el = document.getElementById('clockQueueBanner');
+  if (!el) return;
+  const n = readClockQueue().length;
+  if (!n) { el.classList.add('hidden'); el.textContent = ''; return; }
+  el.classList.remove('hidden');
+  el.textContent = n === 1
+    ? 'One clock-in is saved on this device and will be sent when you are back online.'
+    : `${n} clock-ins are saved on this device and will be sent when you are back online.`;
+}
+
 async function doClock(action) {
   if (!currentEmployee) return;
   const inBtn = document.getElementById('clockInBtn');
   const outBtn = document.getElementById('clockOutBtn');
   inBtn.disabled = true; outBtn.disabled = true;
 
+  let pos = null;
   try {
-    const pos = await getPosition();
+    pos = await getPosition();
     const data = await rpc('clock_action', {
       p_token: sessionToken,
       p_action: action,
@@ -327,7 +434,17 @@ async function doClock(action) {
     }
     loadAttendance();
   } catch (err) {
-    showToast(err?.message || 'Could not record that.', 'error');
+    if (looksOffline(err)) {
+      queueClockAction(action, pos);
+      showToast(
+        pos
+          ? 'No connection. Saved on this device and will be sent automatically.'
+          : 'No connection, and no location available — this may be refused when it is sent.',
+        'warning'
+      );
+    } else {
+      showToast(err?.message || 'Could not record that.', 'error');
+    }
   } finally {
     updateClockUI();
     refreshEligibility();
@@ -400,6 +517,55 @@ async function loadAttendance() {
 /* ============================================================
    Leave
    ============================================================ */
+
+// Entitlement is decided in Postgres, not here. This only shows what the
+// database reports, so the figures cannot drift from what it will enforce.
+async function loadLeaveBalances() {
+  const container = document.getElementById('leaveBalances');
+  if (!container) return;
+
+  try {
+    const rows = await rpc('my_leave_balances', { p_token: sessionToken });
+    if (!rows || !rows.length) { container.innerHTML = ''; return; }
+
+    container.innerHTML = rows.map(r => {
+      const remaining = Number(r.remaining) || 0;
+      const entitled = Number(r.entitled) || 0;
+      const pending = Number(r.pending) || 0;
+      const available = Math.max(remaining - pending, 0);
+      const pct = entitled > 0 ? Math.round((available / entitled) * 100) : 0;
+      const low = available <= 0 ? ' none' : (pct <= 25 ? ' low' : '');
+
+      return `
+        <div class="leave-balance${low}">
+          <div class="leave-balance-head">
+            <span class="leave-balance-name">${escapeHtml(r.leave_name)}</span>
+            <span class="leave-balance-count">
+              <strong>${formatDays(available)}</strong> of ${formatDays(entitled)}
+            </span>
+          </div>
+          <div class="leave-balance-bar" role="img"
+               aria-label="${formatDays(available)} of ${formatDays(entitled)} days left">
+            <span style="width:${pct}%; background:${escapeHtml(r.color || 'var(--accent)')};"></span>
+          </div>
+          ${pending > 0
+            ? `<p class="leave-balance-note">${formatDays(pending)} awaiting approval</p>`
+            : ''}
+        </div>`;
+    }).join('');
+  } catch {
+    // A balance panel is not worth blocking the form over.
+    container.innerHTML = '';
+  }
+}
+
+// 1 -> "1 day", 1.5 -> "1.5 days". Avoids "1 days" and a trailing ".0".
+function formatDays(n) {
+  const v = Number(n) || 0;
+  const text = Number.isInteger(v) ? String(v) : v.toFixed(1);
+  return `${text} ${v === 1 ? 'day' : 'days'}`;
+}
+
 async function submitLeave(e) {
   e.preventDefault();
   if (!currentEmployee) return;
@@ -426,6 +592,7 @@ async function submitLeave(e) {
     showToast('Request submitted for review.', 'success');
     document.getElementById('sickLeaveForm').reset();
     loadMyLeaveRequests();
+    loadLeaveBalances();
   } catch (err) {
     showToast(err?.message || 'Could not submit your request.', 'error');
   } finally {

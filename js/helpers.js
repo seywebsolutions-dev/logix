@@ -425,3 +425,18 @@ function printGovernmentPDFReport(reportTitle, headers, rows) {
   printWindow.document.close();
 }
 window.printGovernmentPDFReport = printGovernmentPDFReport;
+
+/* ============================================================
+   Service worker
+   ------------------------------------------------------------
+   Registered so the portal still opens when the campus WiFi is
+   down and a queued clock-in can be taken. Requires HTTPS, which
+   Vercel provides; on localhost it is allowed over plain http.
+   ============================================================ */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {
+      // Not fatal — the app works online without it.
+    });
+  });
+}
